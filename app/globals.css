@@ -1,26 +1,106 @@
 @import "tailwindcss";
 
 :root {
-  --background: #ffffff;
-  --foreground: #171717;
+  --background: #060609;
+  --foreground: #eceef2;
+  --nx-grad: linear-gradient(120deg, #a5b4fc 0%, #c084fc 50%, #f472b6 100%);
 }
 
 @theme inline {
   --color-background: var(--background);
   --color-foreground: var(--foreground);
-  --font-sans: var(--font-geist-sans);
-  --font-mono: var(--font-geist-mono);
-}
-
-@media (prefers-color-scheme: dark) {
-  :root {
-    --background: #0a0a0a;
-    --foreground: #ededed;
-  }
+  --font-sans: var(--font-geist-sans), ui-sans-serif, system-ui, sans-serif;
+  --font-mono: var(--font-geist-mono), ui-monospace, "SF Mono", Consolas, monospace;
 }
 
 body {
   background: var(--background);
   color: var(--foreground);
-  font-family: var(--font-young-serif), serif;
+  font-family: var(--font-sans);
+}
+
+/* ---------- NexusLearn design system ---------- */
+
+/* ambient dark backdrop: grid + gradient glows */
+.nx-bg {
+  background-color: #060609;
+  background-image:
+    radial-gradient(circle at 15% 0%, rgba(129, 140, 248, 0.14), transparent 45%),
+    radial-gradient(circle at 85% 100%, rgba(244, 114, 182, 0.1), transparent 45%),
+    linear-gradient(rgba(255, 255, 255, 0.025) 1px, transparent 1px),
+    linear-gradient(90deg, rgba(255, 255, 255, 0.025) 1px, transparent 1px);
+  background-size: auto, auto, 44px 44px, 44px 44px;
+}
+
+/* frosted panel */
+.nx-glass {
+  background: rgba(255, 255, 255, 0.035);
+  border: 1px solid rgba(255, 255, 255, 0.09);
+  backdrop-filter: blur(14px);
+  -webkit-backdrop-filter: blur(14px);
+}
+
+/* display serif headings */
+.font-display {
+  font-family: var(--font-young-serif), Georgia, serif;
+}
+
+/* brand gradient text */
+.grad-text {
+  background: var(--nx-grad);
+  -webkit-background-clip: text;
+  background-clip: text;
+  -webkit-text-fill-color: transparent;
+  color: transparent;
+}
+
+/* gradient fills */
+.grad-btn {
+  background: var(--nx-grad);
+  color: #0b0b10;
+}
+.grad-bar {
+  background: var(--nx-grad);
+}
+
+/* entrance animation */
+.nx-fade {
+  animation: nxFade 0.55s cubic-bezier(0.2, 0.8, 0.2, 1) both;
+}
+.nx-fade-1 { animation-delay: 0.06s; }
+.nx-fade-2 { animation-delay: 0.14s; }
+.nx-fade-3 { animation-delay: 0.22s; }
+@keyframes nxFade {
+  from { opacity: 0; transform: translateY(14px); }
+  to { opacity: 1; transform: translateY(0); }
+}
+
+/* pulsing presence dot (AI / live) */
+.pulse-dot { position: relative; }
+.pulse-dot::after {
+  content: "";
+  position: absolute;
+  inset: -4px;
+  border-radius: 50%;
+  background: rgba(192, 132, 252, 0.5);
+  animation: nxPulse 2s ease-out infinite;
+}
+@keyframes nxPulse {
+  0% { transform: scale(0.6); opacity: 0.9; }
+  100% { transform: scale(2); opacity: 0; }
+}
+
+/* dark scrollbar */
+::-webkit-scrollbar { width: 10px; height: 10px; }
+::-webkit-scrollbar-track { background: transparent; }
+::-webkit-scrollbar-thumb {
+  background: rgba(255, 255, 255, 0.14);
+  border-radius: 99px;
+  border: 2px solid #060609;
+}
+::-webkit-scrollbar-thumb:hover { background: rgba(255, 255, 255, 0.25); }
+
+@media (prefers-reduced-motion: reduce) {
+  .nx-fade, .nx-fade-1, .nx-fade-2, .nx-fade-3 { animation: none; }
+  .pulse-dot::after { animation: none; }
 }

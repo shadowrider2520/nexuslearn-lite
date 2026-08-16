@@ -63,6 +63,16 @@ type ChatMessage = {
   created_at: string;
 };
 
+const avatarColors = [
+  "bg-gradient-to-br from-indigo-300 to-purple-400 text-black",
+  "bg-gradient-to-br from-sky-300 to-cyan-400 text-black",
+  "bg-gradient-to-br from-emerald-300 to-teal-400 text-black",
+  "bg-gradient-to-br from-amber-300 to-orange-400 text-black",
+  "bg-gradient-to-br from-pink-300 to-rose-400 text-black",
+];
+
+const initials = (name: string) => (name || "?").slice(0, 2).toUpperCase();
+
 export default function RoomPage({
   params,
 }: {
@@ -1069,14 +1079,11 @@ export default function RoomPage({
 
   if (!room) {
     return (
-      <div
-        className={`${youngSerif.variable} min-h-screen bg-black text-white flex items-center justify-center`}
-        style={{
-          fontFamily:
-            "var(--font-young-serif)",
-        }}
-      >
-        Loading...
+      <div className="nx-bg flex min-h-screen items-center justify-center">
+        <div className="flex flex-col items-center gap-4">
+          <div className="grad-btn grid h-14 w-14 animate-pulse place-items-center rounded-2xl text-2xl font-black">N</div>
+          <p className="font-display text-lg">Loading your room…</p>
+        </div>
       </div>
     );
   }
@@ -1094,141 +1101,91 @@ export default function RoomPage({
   ];
 
   return (
-    <div
-      className={`${geist.variable} ${youngSerif.variable} flex flex-col h-screen bg-black text-white`}
-      style={{
-        fontFamily:
-          "var(--font-young-serif)",
-      }}
-    >
+    <div className={`${geist.variable} ${youngSerif.variable} nx-bg flex h-screen flex-col text-white`}>
       {/* ================================================= */}
       {/* NAVBAR */}
       {/* ================================================= */}
 
-      <div className="bg-black text-white p-4 flex justify-between items-center border-b border-white/10 shrink-0">
-        <div>
-          <h1 className="text-xl font-bold">
-            {room.name}
-          </h1>
+      <div className="shrink-0 border-b border-white/10 bg-black/30 backdrop-blur-xl">
+        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
+          <div className="min-w-0">
+            <h1 className="font-display truncate text-xl">{room.name}</h1>
+            <p className="mt-1 flex items-center gap-1.5 text-[11px] tracking-[.14em] text-gray-500">
+              <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-purple-400" />
+              CODE{" "}
+              <span className="rounded-md border border-white/15 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] tracking-normal text-purple-300">
+                {room.invite_code}
+              </span>
+            </p>
+          </div>
 
-          <p className="text-xs text-gray-500">
-            Code:{" "}
-            {room.invite_code}
-          </p>
+          <div className="flex items-center gap-1">
+            <button
+              onClick={() => setActiveTab("roadmap")}
+              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                activeTab === "roadmap"
+                  ? "bg-white font-semibold text-black"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Roadmap
+            </button>
+
+            <button
+              onClick={() => setActiveTab("chat")}
+              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                activeTab === "chat"
+                  ? "bg-white font-semibold text-black"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Chat
+            </button>
+
+            <button
+              onClick={() => setActiveTab("members")}
+              className={`rounded-lg px-3 py-1.5 text-sm transition ${
+                activeTab === "members"
+                  ? "bg-white font-semibold text-black"
+                  : "text-gray-400 hover:text-white"
+              }`}
+            >
+              Members
+            </button>
+
+            <form action={leaveRoom.bind(null, roomId)}>
+              <button className="ml-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition hover:border-red-400/40 hover:text-red-300">
+                Exit
+              </button>
+            </form>
+          </div>
         </div>
-
-        <div className="flex gap-1">
-          <button
-            onClick={() =>
-              setActiveTab(
-                "roadmap"
-              )
-            }
-            className={`px-3 py-1 rounded text-sm transition ${
-              activeTab ===
-              "roadmap"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Roadmap
-          </button>
-
-          <button
-            onClick={() =>
-              setActiveTab(
-                "chat"
-              )
-            }
-            className={`px-3 py-1 rounded text-sm transition ${
-              activeTab ===
-              "chat"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Chat
-          </button>
-
-          <button
-            onClick={() =>
-              setActiveTab(
-                "members"
-              )
-            }
-            className={`px-3 py-1 rounded text-sm transition ${
-              activeTab ===
-              "members"
-                ? "bg-white text-black"
-                : "text-gray-400 hover:text-white"
-            }`}
-          >
-            Members
-          </button>
-        </div>
-
-        <form
-          action={leaveRoom.bind(
-            null,
-            roomId
-          )}
-        >
-          <button className="text-sm text-gray-400 hover:text-white transition">
-            Exit
-          </button>
-        </form>
       </div>
 
       {/* ================================================= */}
       {/* MAIN CONTENT */}
       {/* ================================================= */}
 
-      <div
-        className="
-          flex-1
-          overflow-auto
-          bg-black
-          text-white
-          p-10
-          max-w-4xl
-          mx-auto
-          w-full
-        "
-      >
+      <div className="mx-auto w-full max-w-4xl flex-1 overflow-auto px-4 py-6 sm:px-6 sm:py-10">
         {/* ================================================= */}
         {/* ROADMAP */}
         {/* ================================================= */}
 
-        {activeTab ===
-          "roadmap" && (
+        {activeTab === "roadmap" && (
           <div>
             {/* RENAME ROOM */}
 
             {isHost && (
               <form
-                action={updateRoomName.bind(
-                  null,
-                  roomId
-                )}
-                className="flex gap-2 mb-8"
+                action={updateRoomName.bind(null, roomId)}
+                className="nx-glass nx-fade mb-8 flex gap-2 rounded-2xl p-4"
               >
                 <input
                   name="name"
                   placeholder="Rename room"
-                  className="
-                    flex-1
-                    rounded-lg
-                    border border-white/10
-                    bg-[#111111]
-                    text-white
-                    placeholder:text-gray-600
-                    px-4 py-2
-                    outline-none
-                    focus:border-white/30
-                  "
+                  className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
                 />
-
-                <button className="bg-white text-black px-4 py-2 rounded-lg text-sm font-semibold hover:bg-gray-200 transition">
+                <button className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-200">
                   Rename
                 </button>
               </form>
@@ -1236,63 +1193,37 @@ export default function RoomPage({
 
             {/* PROGRESS */}
 
-            {steps.length >
-              0 && (
-              <div className="mb-8">
-                <h2 className="font-bold text-white text-lg mb-4">
-                  Progress
-                </h2>
-
+            {steps.length > 0 && (
+              <div className="nx-fade nx-fade-1 mb-8">
+                <h2 className="font-display mb-4 text-xl">Progress</h2>
                 <div className="flex flex-col gap-4">
-                  {members.map(
-                    (m) => {
-                      const pct =
-                        getMemberPercent(
-                          m.user_id
-                        );
+                  {members.map((m, i) => {
+                    const pct = getMemberPercent(m.user_id);
 
-                      return (
-                        <div
-                          key={
-                            m.user_id
-                          }
-                        >
-                          <div className="flex justify-between text-sm mb-2">
+                    return (
+                      <div key={m.user_id}>
+                        <div className="mb-2 flex items-center justify-between text-sm">
+                          <span className="flex items-center gap-2.5">
+                            <span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] font-bold ${avatarColors[i % avatarColors.length]}`}>
+                              {initials(m.username)}
+                            </span>
                             <span className="text-white">
-                              {
-                                m.username
-                              }
-
-                              {m.user_id ===
-                                userId &&
-                                " (you)"}
+                              {m.username}
+                              {m.user_id === userId && <span className="ml-1 text-gray-500">(you)</span>}
                             </span>
-
-                            <span className="text-gray-400">
-                              {pct}%
-                            </span>
-                          </div>
-
-                          <div className="w-full bg-[#1a1a1a] border border-white/5 rounded-full h-2 overflow-hidden">
-                            <div
-                              className="bg-white h-2 rounded-full transition-all duration-300"
-                              style={{
-                                width: `${pct}%`,
-                              }}
-                            />
-                          </div>
-
-                          {pct ===
-                            100 && (
-                            <p className="text-gray-400 text-xs mt-2">
-                              Roadmap
-                              completed
-                            </p>
-                          )}
+                          </span>
+                          <span className="font-mono text-xs text-gray-400">{pct}%</span>
                         </div>
-                      );
-                    }
-                  )}
+                        <div className="h-2 w-full overflow-hidden rounded-full border border-white/5 bg-white/5">
+                          <div
+                            className="grad-bar h-2 rounded-full transition-all duration-300"
+                            style={{ width: `${pct}%` }}
+                          />
+                        </div>
+                        {pct === 100 && <p className="mt-2 text-xs text-gray-500">Roadmap completed 🎉</p>}
+                      </div>
+                    );
+                  })}
                 </div>
               </div>
             )}
@@ -1300,238 +1231,101 @@ export default function RoomPage({
             {/* ROADMAP LIST */}
 
             <div className="mb-8">
-              <div className="flex justify-between items-center mb-4">
-                <h2 className="font-bold text-white text-lg">
-                  Roadmaps
-                </h2>
-
+              <div className="mb-4 flex items-center justify-between">
+                <h2 className="font-display text-xl">Roadmaps</h2>
                 <button
-                  onClick={() =>
-                    setShowNewRoadmapForm(
-                      true
-                    )
-                  }
-                  className="text-sm text-gray-400 hover:text-white underline transition"
+                  onClick={() => setShowNewRoadmapForm(true)}
+                  className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition hover:border-purple-400/50 hover:text-purple-300"
                 >
-                  + New
+                  + New roadmap
                 </button>
               </div>
 
-              {roadmapsList.length >
-                0 && (
-                <div className="flex gap-2 flex-wrap mb-5">
-                  {roadmapsList.map(
-                    (r) => (
-                      <div
-                        key={
-                          r.id
-                        }
-                        className={`
-                          flex
-                          items-center
-                          gap-1
-                          border
-                          rounded-lg
-                          px-3
-                          py-2
-                          text-sm
-                          transition
-                          ${
-                            activeRoadmapId ===
-                            r.id
-                              ? "bg-white text-black border-white"
-                              : "bg-[#111111] text-gray-300 border-white/10 hover:border-white/30"
-                          }
-                        `}
+              {roadmapsList.length > 0 && (
+                <div className="mb-5 flex flex-wrap gap-2">
+                  {roadmapsList.map((r) => (
+                    <div
+                      key={r.id}
+                      className={`group flex items-center gap-1 rounded-xl border px-3 py-2 text-sm transition ${
+                        activeRoadmapId === r.id
+                          ? "border-white bg-white font-semibold text-black"
+                          : "border-white/10 bg-white/[.03] text-gray-300 hover:border-white/30"
+                      }`}
+                    >
+                      <button onClick={() => setActiveRoadmapId(r.id)}>{r.topic}</button>
+                      <button
+                        onClick={() => handleDeleteRoadmap(r.id)}
+                        className="ml-1 opacity-40 transition hover:opacity-100 hover:text-red-400"
                       >
-                        <button
-                          onClick={() =>
-                            setActiveRoadmapId(
-                              r.id
-                            )
-                          }
-                        >
-                          {
-                            r.topic
-                          }
-                        </button>
-
-                        <button
-                          onClick={() =>
-                            handleDeleteRoadmap(
-                              r.id
-                            )
-                          }
-                          className="ml-1 opacity-50 hover:opacity-100"
-                        >
-                          ×
-                        </button>
-                      </div>
-                    )
-                  )}
+                        ×
+                      </button>
+                    </div>
+                  ))}
                 </div>
               )}
 
               {/* NEW ROADMAP FORM */}
 
               {showNewRoadmapForm &&
-                (formStep ===
-                "topic" ? (
-                  <div className="flex gap-2 mb-5">
+                (formStep === "topic" ? (
+                  <div className="mb-5 flex gap-2">
                     <input
-                      value={
-                        topic
-                      }
-                      onChange={(
-                        e
-                      ) =>
-                        setTopic(
-                          e
-                            .target
-                            .value
-                        )
-                      }
-                      placeholder="Paste a topic or notes..."
-                      className="
-                        flex-1
-                        rounded-lg
-                        border border-white/10
-                        bg-[#111111]
-                        text-white
-                        placeholder:text-gray-600
-                        px-4 py-2
-                        outline-none
-                        focus:border-white/30
-                      "
+                      value={topic}
+                      onChange={(e) => setTopic(e.target.value)}
+                      placeholder="Paste a topic or notes…"
+                      className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
                     />
-
                     <button
-                      onClick={() =>
-                        topic.trim() &&
-                        setFormStep(
-                          "prefs"
-                        )
-                      }
-                      className="bg-white text-black px-4 py-2 rounded-lg font-semibold"
+                      onClick={() => topic.trim() && setFormStep("prefs")}
+                      className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-gray-200"
                     >
                       Next
                     </button>
                   </div>
                 ) : (
-                  <div className="flex flex-col gap-5 border border-white/10 bg-[#0d0d0d] p-5 rounded-xl mb-5">
+                  <div className="nx-glass nx-fade mb-5 flex flex-col gap-5 rounded-2xl p-5">
                     <div>
-                      <label className="text-sm font-semibold block mb-2 text-white">
-                        Minutes per day?
-                      </label>
-
+                      <label className="mb-2 block text-sm font-semibold text-white">Minutes per day?</label>
                       <input
                         type="number"
-                        value={
-                          minutesPerDay
-                        }
-                        onChange={(
-                          e
-                        ) =>
-                          setMinutesPerDay(
-                            Number(
-                              e
-                                .target
-                                .value
-                            )
-                          )
-                        }
-                        className="
-                          border border-white/10
-                          bg-[#111111]
-                          text-white
-                          p-2
-                          rounded-lg
-                          w-32
-                          outline-none
-                        "
+                        value={minutesPerDay}
+                        onChange={(e) => setMinutesPerDay(Number(e.target.value))}
+                        className="w-32 rounded-xl border border-white/10 bg-black/40 p-2 text-sm text-white outline-none transition focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
                       />
                     </div>
 
                     <div>
-                      <label className="text-sm font-semibold block mb-2 text-white">
-                        Complexity?
-                      </label>
-
-                      <div className="flex gap-2">
-                        {[
-                          "quick",
-                          "detailed",
-                          "thorough",
-                        ].map(
-                          (
-                            lvl
-                          ) => (
-                            <button
-                              key={
-                                lvl
-                              }
-                              onClick={() =>
-                                setDetailLevel(
-                                  lvl
-                                )
-                              }
-                              className={`
-                                px-3
-                                py-1
-                                rounded-lg
-                                text-sm
-                                border
-                                transition
-                                ${
-                                  detailLevel ===
-                                  lvl
-                                    ? "bg-white text-black border-white"
-                                    : "bg-[#111111] text-gray-400 border-white/10"
-                                }
-                              `}
-                            >
-                              {
-                                lvl
-                              }
-                            </button>
-                          )
-                        )}
+                      <label className="mb-2 block text-sm font-semibold text-white">Complexity?</label>
+                      <div className="flex flex-wrap gap-2">
+                        {["quick", "detailed", "thorough"].map((lvl) => (
+                          <button
+                            key={lvl}
+                            onClick={() => setDetailLevel(lvl)}
+                            className={`rounded-xl border px-3 py-1.5 text-sm transition ${
+                              detailLevel === lvl
+                                ? "grad-btn border-transparent font-semibold"
+                                : "border-white/10 bg-white/[.03] text-gray-400 hover:border-white/30 hover:text-white"
+                            }`}
+                          >
+                            {lvl}
+                          </button>
+                        ))}
                       </div>
                     </div>
 
-                    <div className="flex gap-2">
+                    <div className="flex items-center gap-2">
                       <button
-                        onClick={() =>
-                          setFormStep(
-                            "topic"
-                          )
-                        }
-                        className="text-sm text-gray-400 hover:text-white underline"
+                        onClick={() => setFormStep("topic")}
+                        className="text-sm text-gray-400 underline transition hover:text-white"
                       >
                         Back
                       </button>
-
                       <button
-                        onClick={
-                          generateRoadmap
-                        }
-                        disabled={
-                          loading
-                        }
-                        className="
-                          bg-white
-                          text-black
-                          px-4
-                          py-2
-                          rounded-lg
-                          font-semibold
-                          ml-auto
-                          disabled:opacity-40
-                        "
+                        onClick={generateRoadmap}
+                        disabled={loading}
+                        className="grad-btn ml-auto rounded-xl px-5 py-2 text-sm font-bold transition hover:opacity-90 disabled:opacity-40"
                       >
-                        {loading
-                          ? "Generating..."
-                          : "Generate"}
+                        {loading ? "Generating…" : "Generate"}
                       </button>
                     </div>
                   </div>
@@ -1540,325 +1334,189 @@ export default function RoomPage({
 
             {/* ROADMAP STEPS */}
 
-            {activeRoadmapId &&
-              steps.length >
-                0 && (
-                <div className="flex flex-col gap-8">
-                  {dayNumbers.map(
-                    (dayNum) => (
-                      <div
-                        key={
-                          dayNum
-                        }
-                      >
-                        <h3 className="text-sm font-bold text-white mb-3">
-                          Day{" "}
-                          {dayNum}
-                        </h3>
+            {activeRoadmapId && steps.length > 0 && (
+              <div className="flex flex-col gap-8">
+                {dayNumbers.map((dayNum) => (
+                  <div key={dayNum}>
+                    <h3 className="mb-3 flex items-center gap-3 font-display text-lg">
+                      Day {dayNum}
+                      <span className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent" />
+                    </h3>
 
-                        <ul className="flex flex-col gap-4">
-                          {steps
-                            .filter(
-                              (
-                                s
-                              ) =>
-                                s.day ===
-                                dayNum
-                            )
-                            .map(
-                              (
-                                step
-                              ) => {
-                                const myDone =
-                                  progress.some(
-                                    (
-                                      p
-                                    ) =>
-                                      p.step_id ===
-                                        step.id &&
-                                      p.user_id ===
-                                        userId &&
-                                      p.completed
-                                  );
+                    <ul className="flex flex-col gap-3">
+                      {steps
+                        .filter((s) => s.day === dayNum)
+                        .map((step) => {
+                          const myDone = progress.some(
+                            (p) => p.step_id === step.id && p.user_id === userId && p.completed
+                          );
 
-                                const completedByUsernames =
-                                  getCompletedUsers(
-                                    step.id
-                                  );
+                          const completedByUsernames = getCompletedUsers(step.id);
+                          const stepTasks = tasksByStep[step.id];
 
-                                const stepTasks =
-                                  tasksByStep[
-                                    step.id
-                                  ];
+                          return (
+                            <li
+                              key={step.id}
+                              className="nx-glass group rounded-2xl p-5 transition hover:border-white/20"
+                            >
+                              <div className="flex items-start gap-3.5">
+                                {/* STEP CHECKBOX */}
 
-                                return (
-                                  <li
-                                    key={
-                                      step.id
+                                <input
+                                  type="checkbox"
+                                  checked={myDone}
+                                  onChange={() => toggleStep(step.id, myDone)}
+                                  className="mt-1 h-4 w-4 cursor-pointer accent-purple-400"
+                                />
+
+                                <div className="flex-1">
+                                  {/* STEP TITLE */}
+
+                                  <p
+                                    className={
+                                      myDone
+                                        ? "font-semibold text-gray-500 line-through"
+                                        : "font-semibold text-white"
                                     }
-                                    className="
-                                      border
-                                      border-white/10
-                                      bg-[#0d0d0d]
-                                      p-4
-                                      rounded-xl
-                                    "
                                   >
-                                    <div className="flex items-start gap-3">
-                                      {/* STEP CHECKBOX */}
+                                    {step.title}
+                                  </p>
 
-                                      <input
-                                        type="checkbox"
-                                        checked={
-                                          myDone
-                                        }
-                                        onChange={() =>
-                                          toggleStep(
-                                            step.id,
-                                            myDone
-                                          )
-                                        }
-                                        className="
-                                          mt-1
-                                          h-4
-                                          w-4
-                                          accent-white
-                                          cursor-pointer
-                                        "
-                                      />
+                                  {/* DESCRIPTION */}
 
-                                      <div className="flex-1">
-                                        {/* STEP TITLE */}
+                                  <p className="mt-1 text-sm text-gray-300">{step.description}</p>
 
-                                        <p
-                                          className={
-                                            myDone
-                                              ? "line-through text-gray-500 font-semibold"
-                                              : "text-white font-semibold"
-                                          }
+                                  {/* TIME */}
+
+                                  <p className="mt-1 text-xs text-gray-500">⏱ {step.estimated_minutes} min</p>
+
+                                  {/* COMPLETED USERS */}
+
+                                  {completedByUsernames.length > 0 && (
+                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
+                                      <span className="text-xs text-gray-500">Completed by:</span>
+                                      {completedByUsernames.map((u, idx) => (
+                                        <span
+                                          key={`${u}-${idx}`}
+                                          className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300"
                                         >
-                                          {
-                                            step.title
-                                          }
-                                        </p>
-
-                                        {/* DESCRIPTION */}
-
-                                        <p className="text-sm text-gray-300 mt-1">
-                                          {
-                                            step.description
-                                          }
-                                        </p>
-
-                                        {/* TIME */}
-
-                                        <p className="text-xs text-gray-500 mt-1">
-                                          {
-                                            step.estimated_minutes
-                                          }{" "}
-                                          min
-                                        </p>
-
-                                        {/* COMPLETED USERS */}
-
-                                        {completedByUsernames.length >
-                                          0 && (
-                                          <p className="text-xs text-gray-400 mt-2">
-                                            Completed
-                                            by:{" "}
-                                            {completedByUsernames.join(
-                                              ", "
-                                            )}
-                                          </p>
-                                        )}
-
-                                        {/* TASKS */}
-
-                                        <div className="mt-4 border-t border-white/10 pt-3">
-                                          {!stepTasks ? (
-                                            <button
-                                              onClick={() =>
-                                                generateTasksForStep(
-                                                  step
-                                                )
-                                              }
-                                              disabled={
-                                                taskLoadingStep ===
-                                                step.id
-                                              }
-                                              className="
-                                                text-xs
-                                                underline
-                                                text-gray-400
-                                                hover:text-white
-                                              "
-                                            >
-                                              {taskLoadingStep ===
-                                              step.id
-                                                ? "Generating..."
-                                                : "Generate tasks & mini-project"}
-                                            </button>
-                                          ) : (
-                                            <div>
-                                              {/* TASK HEADER */}
-
-                                              <div className="flex justify-between items-center mb-3">
-                                                <p className="text-xs font-semibold text-white">
-                                                  Tasks
-                                                  &
-                                                  Projects
-                                                </p>
-
-                                                <div className="flex gap-3">
-                                                  <button
-                                                    onClick={() =>
-                                                      generateTasksForStep(
-                                                        step
-                                                      )
-                                                    }
-                                                    className="text-xs text-gray-400 hover:text-white underline"
-                                                  >
-                                                    Regenerate
-                                                  </button>
-
-                                                  <button
-                                                    onClick={() =>
-                                                      handleDeleteTasks(
-                                                        step.id
-                                                      )
-                                                    }
-                                                    className="text-xs text-red-400 hover:text-red-300 underline"
-                                                  >
-                                                    Delete
-                                                  </button>
-                                                </div>
-                                              </div>
-
-                                              {/* TASK LIST */}
-
-                                              <ul className="flex flex-col gap-2">
-                                                {stepTasks.map(
-                                                  (
-                                                    t
-                                                  ) => {
-                                                    const taskDone =
-                                                      taskProgress.some(
-                                                        (
-                                                          p
-                                                        ) =>
-                                                          p.step_id ===
-                                                            step.id &&
-                                                          p.task_id ===
-                                                            t.id &&
-                                                          p.user_id ===
-                                                            userId &&
-                                                          p.completed
-                                                      );
-
-                                                    return (
-                                                      <li
-                                                        key={
-                                                          t.id
-                                                        }
-                                                        className="
-                                                          text-xs
-                                                          bg-[#11131f]
-                                                          border
-                                                          border-white/5
-                                                          text-white
-                                                          p-3
-                                                          rounded-lg
-                                                          flex
-                                                          items-start
-                                                          gap-3
-                                                        "
-                                                      >
-                                                        {/* TASK CHECKBOX */}
-
-                                                        <input
-                                                          type="checkbox"
-                                                          checked={
-                                                            taskDone
-                                                          }
-                                                          onChange={() =>
-                                                            toggleTask(
-                                                              step.id,
-                                                              t.id,
-                                                              taskDone
-                                                            )
-                                                          }
-                                                          className="
-                                                            mt-0.5
-                                                            h-4
-                                                            w-4
-                                                            accent-white
-                                                            cursor-pointer
-                                                          "
-                                                        />
-
-                                                        <div className="flex-1">
-                                                          <span
-                                                            className={
-                                                              t.type ===
-                                                              "project"
-                                                                ? "text-purple-400 font-semibold"
-                                                                : "text-blue-400 font-semibold"
-                                                            }
-                                                          >
-                                                            [
-                                                            {t.type ===
-                                                            "project"
-                                                              ? "Project"
-                                                              : "Task"}
-                                                            ]
-                                                          </span>{" "}
-
-                                                          <span
-                                                            className={
-                                                              taskDone
-                                                                ? "line-through text-gray-500"
-                                                                : "text-white"
-                                                            }
-                                                          >
-                                                            {
-                                                              t.title
-                                                            }
-                                                          </span>
-
-                                                          {t.description && (
-                                                            <p
-                                                              className={
-                                                                taskDone
-                                                                  ? "mt-1 text-gray-600 line-through"
-                                                                  : "mt-1 text-gray-400"
-                                                              }
-                                                            >
-                                                              {
-                                                                t.description
-                                                              }
-                                                            </p>
-                                                          )}
-                                                        </div>
-                                                      </li>
-                                                    );
-                                                  }
-                                                )}
-                                              </ul>
-                                            </div>
-                                          )}
-                                        </div>
-                                      </div>
+                                          {u}
+                                        </span>
+                                      ))}
                                     </div>
-                                  </li>
-                                );
-                              }
-                            )}
-                        </ul>
-                      </div>
-                    )
-                  )}
-                </div>
-              )}
+                                  )}
+
+                                  {/* TASKS */}
+
+                                  <div className="mt-4 border-t border-white/10 pt-3">
+                                    {!stepTasks ? (
+                                      <button
+                                        onClick={() => generateTasksForStep(step)}
+                                        disabled={taskLoadingStep === step.id}
+                                        className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-purple-300"
+                                      >
+                                        {taskLoadingStep === step.id
+                                          ? "Generating…"
+                                          : "Generate tasks & mini-project"}
+                                      </button>
+                                    ) : (
+                                      <div>
+                                        {/* TASK HEADER */}
+
+                                        <div className="mb-3 flex items-center justify-between">
+                                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
+                                            Tasks & Projects
+                                          </p>
+                                          <div className="flex gap-3">
+                                            <button
+                                              onClick={() => generateTasksForStep(step)}
+                                              className="text-xs text-gray-400 underline transition hover:text-purple-300"
+                                            >
+                                              Regenerate
+                                            </button>
+                                            <button
+                                              onClick={() => handleDeleteTasks(step.id)}
+                                              className="text-xs text-red-400 underline transition hover:text-red-300"
+                                            >
+                                              Delete
+                                            </button>
+                                          </div>
+                                        </div>
+
+                                        {/* TASK LIST */}
+
+                                        <ul className="flex flex-col gap-2">
+                                          {stepTasks.map((t) => {
+                                            const taskDone = taskProgress.some(
+                                              (p) =>
+                                                p.step_id === step.id &&
+                                                p.task_id === t.id &&
+                                                p.user_id === userId &&
+                                                p.completed
+                                            );
+
+                                            return (
+                                              <li
+                                                key={t.id}
+                                                className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[.03] p-3 text-xs text-white transition hover:border-white/15"
+                                              >
+                                                {/* TASK CHECKBOX */}
+
+                                                <input
+                                                  type="checkbox"
+                                                  checked={taskDone}
+                                                  onChange={() => toggleTask(step.id, t.id, taskDone)}
+                                                  className="mt-0.5 h-4 w-4 cursor-pointer accent-purple-400"
+                                                />
+
+                                                <div className="flex-1">
+                                                  <span
+                                                    className={
+                                                      t.type === "project"
+                                                        ? "font-semibold text-purple-400"
+                                                        : "font-semibold text-blue-400"
+                                                    }
+                                                  >
+                                                    [{t.type === "project" ? "Project" : "Task"}]
+                                                  </span>{" "}
+
+                                                  <span
+                                                    className={
+                                                      taskDone ? "text-gray-500 line-through" : "text-white"
+                                                    }
+                                                  >
+                                                    {t.title}
+                                                  </span>
+
+                                                  {t.description && (
+                                                    <p
+                                                      className={
+                                                        taskDone
+                                                          ? "mt-1 text-gray-600 line-through"
+                                                          : "mt-1 text-gray-400"
+                                                      }
+                                                    >
+                                                      {t.description}
+                                                    </p>
+                                                  )}
+                                                </div>
+                                              </li>
+                                            );
+                                          })}
+                                        </ul>
+                                      </div>
+                                    )}
+                                  </div>
+                                </div>
+                              </div>
+                            </li>
+                          );
+                        })}
+                    </ul>
+                  </div>
+                ))}
+              </div>
+            )}
           </div>
         )}
 
@@ -1866,183 +1524,84 @@ export default function RoomPage({
         {/* CHAT */}
         {/* ================================================= */}
 
-        {activeTab ===
-          "chat" && (
-          <div
-            className="flex flex-col h-full bg-black text-white"
-            style={{
-              fontFamily:
-                "var(--font-young-serif)",
-            }}
-          >
+        {activeTab === "chat" && (
+          <div className="flex h-full flex-col">
             {/* MESSAGE AREA */}
 
-            <div className="flex-1 overflow-auto mb-4 rounded-2xl border border-white/10 bg-[#0a0a0a] p-5">
-              <div className="flex flex-col gap-4">
-                {messages.length ===
-                0 ? (
-                  <div className="flex flex-col items-center justify-center h-full text-center">
-                    <p className="text-white text-lg font-semibold">
-                      Start a
-                      conversation
-                    </p>
-
-                    <p className="text-gray-500 text-sm mt-1">
-                      Ask the AI
-                      tutor
-                      something or
-                      start
-                      discussing
-                      with your
-                      group.
+            <div className="nx-glass mb-4 flex-1 overflow-auto rounded-2xl p-5">
+              <div className="flex flex-col gap-3">
+                {messages.length === 0 ? (
+                  <div className="flex h-full flex-col items-center justify-center text-center">
+                    <div className="pulse-dot mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-purple-400/30 bg-purple-500/10 text-2xl">
+                      ✦
+                    </div>
+                    <p className="font-display text-xl">Start a conversation</p>
+                    <p className="mt-1 text-sm text-gray-500">
+                      Ask the AI tutor something or start discussing with your group.
                     </p>
                   </div>
                 ) : (
-                  messages.map(
-                    (m) => (
+                  messages.map((m) => (
+                    <div key={m.id} className={`flex ${m.is_ai ? "justify-start" : "justify-end"}`}>
                       <div
-                        key={
-                          m.id
-                        }
-                        className={`flex ${
+                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
                           m.is_ai
-                            ? "justify-start"
-                            : "justify-end"
+                            ? "border border-purple-400/20 bg-purple-500/10"
+                            : "bg-white text-black shadow-lg"
                         }`}
                       >
                         <div
-                          className={`
-                            max-w-[80%]
-                            rounded-2xl
-                            px-4
-                            py-3
-                            ${
-                              m.is_ai
-                                ? "bg-[#151515] border border-white/10"
-                                : "bg-white text-black"
-                            }
-                          `}
+                          className={`mb-1 flex items-center gap-1.5 text-xs font-bold tracking-wide ${
+                            m.is_ai ? "text-purple-300" : "text-black"
+                          }`}
                         >
-                          <div
-                            className={`
-                              text-xs
-                              font-bold
-                              mb-1
-                              tracking-wide
-                              ${
-                                m.is_ai
-                                  ? "text-white"
-                                  : "text-black"
-                              }
-                            `}
-                          >
-                            {m.is_ai
-                              ? "AI Tutor"
-                              : m.username}
-                          </div>
-
-                          <p
-                            className={`
-                              text-sm
-                              leading-6
-                              whitespace-pre-wrap
-                              ${
-                                m.is_ai
-                                  ? "text-gray-200"
-                                  : "text-black"
-                              }
-                            `}
-                          >
-                            {
-                              m.content
-                            }
-                          </p>
-
-                          <p className="text-[10px] mt-2 text-gray-500">
-                            {new Date(
-                              m.created_at
-                            ).toLocaleTimeString(
-                              [],
-                              {
-                                hour: "2-digit",
-                                minute:
-                                  "2-digit",
-                              }
-                            )}
-                          </p>
+                          {m.is_ai && <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-purple-400" />}
+                          {m.is_ai ? "AI Tutor" : m.username}
                         </div>
+
+                        <p
+                          className={`whitespace-pre-wrap text-sm leading-6 ${
+                            m.is_ai ? "text-gray-200" : "text-black"
+                          }`}
+                        >
+                          {m.content}
+                        </p>
+
+                        <p className="mt-2 text-[10px] text-gray-500">
+                          {new Date(m.created_at).toLocaleTimeString([], {
+                            hour: "2-digit",
+                            minute: "2-digit",
+                          })}
+                        </p>
                       </div>
-                    )
-                  )
+                    </div>
+                  ))
                 )}
               </div>
             </div>
 
             {/* CHAT INPUT */}
 
-            <div className="flex gap-3 items-center">
+            <div className="flex items-center gap-3 pb-2">
               <input
-                value={
-                  chatInput
-                }
-                onChange={(
-                  e
-                ) =>
-                  setChatInput(
-                    e.target
-                      .value
-                  )
-                }
-                onKeyDown={(
-                  e
-                ) => {
-                  if (
-                    e.key ===
-                      "Enter" &&
-                    !e.shiftKey
-                  ) {
+                value={chatInput}
+                onChange={(e) => setChatInput(e.target.value)}
+                onKeyDown={(e) => {
+                  if (e.key === "Enter" && !e.shiftKey) {
                     e.preventDefault();
                     sendMessage();
                   }
                 }}
-                placeholder="Ask the tutor or chat with your group..."
-                className="
-                  flex-1
-                  rounded-xl
-                  border border-white/10
-                  bg-[#111111]
-                  text-white
-                  placeholder:text-gray-500
-                  px-4 py-3
-                  outline-none
-                  focus:border-white/30
-                  transition
-                "
+                placeholder="Ask the tutor or chat with your group…"
+                className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
               />
 
               <button
-                onClick={
-                  sendMessage
-                }
-                disabled={
-                  chatLoading ||
-                  !chatInput.trim()
-                }
-                className="
-                  rounded-xl
-                  bg-white
-                  text-black
-                  px-5 py-3
-                  font-semibold
-                  transition
-                  hover:bg-gray-200
-                  disabled:opacity-40
-                  disabled:cursor-not-allowed
-                "
+                onClick={sendMessage}
+                disabled={chatLoading || !chatInput.trim()}
+                className="grad-btn rounded-xl px-5 py-3 text-sm font-bold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
               >
-                {chatLoading
-                  ? "Thinking..."
-                  : "Send"}
+                {chatLoading ? "Thinking…" : "Send"}
               </button>
             </div>
           </div>
@@ -2052,53 +1611,35 @@ export default function RoomPage({
         {/* MEMBERS */}
         {/* ================================================= */}
 
-        {activeTab ===
-          "members" && (
+        {activeTab === "members" && (
           <div>
-            <h2 className="font-bold text-white text-lg mb-4">
-              Room Members (
-              {members.length})
-            </h2>
+            <h2 className="font-display mb-4 text-xl">Room Members ({members.length})</h2>
 
-            <ul className="flex flex-col gap-3">
-              {members.map(
-                (m) => (
+            <ul className="nx-glass flex flex-col gap-3 rounded-2xl p-4">
+              {members.map((m, i) => {
+                const pct = getMemberPercent(m.user_id);
+                return (
                   <li
-                    key={
-                      m.user_id
-                    }
-                    className="
-                      flex
-                      items-center
-                      justify-between
-                      p-3
-                      rounded-xl
-                      border
-                      border-white/10
-                      bg-[#0d0d0d]
-                    "
+                    key={m.user_id}
+                    className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[.02] p-3.5 transition hover:border-white/15"
                   >
-                    <span className="text-white">
-                      {m.username}
-
-                      {m.user_id ===
-                        userId &&
-                        " (you)"}
+                    <span className="flex items-center gap-3">
+                      <span className={`grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold ${avatarColors[i % avatarColors.length]}`}>
+                        {initials(m.username)}
+                      </span>
+                      <span className="text-white">
+                        {m.username}
+                        {m.user_id === userId && <span className="ml-1 text-gray-500">(you)</span>}
+                      </span>
                     </span>
-
-                    <span className="text-xs text-gray-500">
-                      {getMemberPercent(
-                        m.user_id
-                      )}
-                      % done
-                    </span>
+                    <span className="font-mono text-xs text-gray-500">{pct}% done</span>
                   </li>
-                )
-              )}
+                );
+              })}
             </ul>
           </div>
         )}
       </div>
     </div>
   );
-} 
+}
