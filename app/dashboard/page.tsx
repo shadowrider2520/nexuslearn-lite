@@ -2,7 +2,7 @@
 import { useEffect, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
-import { createRoom, joinRoom } from "./actions";
+import { createRoom, joinRoom } from "../actions";
 
 export default function Home() {
   const [rooms, setRooms] = useState<{ id: string; name: string }[]>([]);

@@ -15,7 +15,7 @@ export default function Login() {
     if (error) { setErrorMsg(error.message); return; }
 
     const { data: profile } = await supabase.from("profiles").select("id").eq("id", data.user.id).single();
-    router.push(profile ? "/" : "/set-username");
+    router.push(profile ? "/dashboard" : "/set-username");
     router.refresh();
   };
 

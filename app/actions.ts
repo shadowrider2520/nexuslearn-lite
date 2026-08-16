@@ -63,7 +63,7 @@ export async function leaveRoom(roomId: string) {
   const { data: { user } } = await supabase.auth.getUser();
   if (!user) return;
   await supabase.from("room_members").delete().eq("room_id", roomId).eq("user_id", user.id);
-  redirect("/");
+  redirect("/dashboard");
 }
 
 export async function deleteRoadmap(roadmapId: string) {

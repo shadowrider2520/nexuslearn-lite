@@ -17,7 +17,7 @@ export default function SetUsername() {
     if (error) {
       setErrorMsg(error.message);
     } else {
-      router.push("/");
+      router.push("/dashboard");
       router.refresh();
     }
   };

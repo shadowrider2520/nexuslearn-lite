@@ -2,6 +2,11 @@ import { createServerClient } from "@supabase/ssr";
 import { NextResponse, type NextRequest } from "next/server";
 
 export async function proxy(request: NextRequest) {
+  // Serve the marketing landing page at the root — the app itself lives at /dashboard.
+  if (request.nextUrl.pathname === "/") {
+    return NextResponse.rewrite(new URL("/landing.html", request.url));
+  }
+
   let response = NextResponse.next({ request });
 
   const supabase = createServerClient(
