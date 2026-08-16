@@ -1,14 +1,24 @@
 "use client";
 
 import { Geist, Young_Serif } from "next/font/google";
-import { useEffect, useState } from "react";
+import { useCallback, useEffect, useMemo, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
-import {
-  updateRoomName,
-  leaveRoom,
-  deleteRoadmap,
-  deleteTasks,
-} from "../../actions";
+import { deleteRoadmap, deleteTasks } from "../../actions";
+import type {
+  ChatMessage,
+  Member,
+  ProgressRow,
+  RoadmapMeta,
+  Room,
+  RoomTab,
+  Step,
+  TaskItem,
+  TaskProgressRow,
+} from "@/lib/types";
+import { ChatPanel } from "../components/ChatPanel";
+import { MembersPanel } from "../components/MembersPanel";
+import { RoadmapPanel, type TaskError } from "../components/RoadmapPanel";
+import { RoomNavbar } from "../components/RoomNavbar";
 
 const geist = Geist({
   subsets: ["latin"],
@@ -21,58 +31,6 @@ const youngSerif = Young_Serif({
   weight: "400",
 });
 
-type Step = {
-  id: number;
-  day: number;
-  title: string;
-  description: string;
-  estimated_minutes: number;
-};
-
-type ProgressRow = {
-  step_id: number;
-  user_id: string;
-  completed: boolean;
-};
-
-type TaskProgressRow = {
-  step_id: number;
-  task_id: number;
-  user_id: string;
-  completed: boolean;
-};
-
-type RoadmapMeta = {
-  id: string;
-  topic: string;
-  created_at: string;
-};
-
-type TaskItem = {
-  id: number;
-  type: "task" | "project";
-  title: string;
-  description: string;
-};
-
-type ChatMessage = {
-  id: string;
-  username: string;
-  content: string;
-  is_ai: boolean;
-  created_at: string;
-};
-
-const avatarColors = [
-  "bg-gradient-to-br from-indigo-300 to-purple-400 text-black",
-  "bg-gradient-to-br from-sky-300 to-cyan-400 text-black",
-  "bg-gradient-to-br from-emerald-300 to-teal-400 text-black",
-  "bg-gradient-to-br from-amber-300 to-orange-400 text-black",
-  "bg-gradient-to-br from-pink-300 to-rose-400 text-black",
-];
-
-const initials = (name: string) => (name || "?").slice(0, 2).toUpperCase();
-
 export default function RoomPage({
   params,
 }: {
@@ -80,15 +38,9 @@ export default function RoomPage({
 }) {
   const [roomId, setRoomId] = useState("");
 
-  const [room, setRoom] = useState<{
-    name: string;
-    invite_code: string;
-    created_by: string;
-  } | null>(null);
+  const [room, setRoom] = useState<Room | null>(null);
 
-  const [members, setMembers] = useState<
-    { user_id: string; username: string }[]
-  >([]);
+  const [members, setMembers] = useState<Member[]>([]);
 
   const [userId, setUserId] = useState("");
 
@@ -97,8 +49,7 @@ export default function RoomPage({
    */
 
   const [roadmapsList, setRoadmapsList] = useState<RoadmapMeta[]>([]);
-  const [activeRoadmapId, setActiveRoadmapId] =
-    useState<string | null>(null);
+  const [activeRoadmapId, setActiveRoadmapId] = useState<string | null>(null);
 
   const [steps, setSteps] = useState<Step[]>([]);
   const [progress, setProgress] = useState<ProgressRow[]>([]);
@@ -107,16 +58,10 @@ export default function RoomPage({
    * TASKS
    */
 
-  const [tasksByStep, setTasksByStep] = useState<
-    Record<number, TaskItem[]>
-  >({});
-
-  const [taskProgress, setTaskProgress] = useState<
-    TaskProgressRow[]
-  >([]);
-
-  const [taskLoadingStep, setTaskLoadingStep] =
-    useState<number | null>(null);
+  const [tasksByStep, setTasksByStep] = useState<Record<number, TaskItem[]>>({});
+  const [taskProgress, setTaskProgress] = useState<TaskProgressRow[]>([]);
+  const [taskLoadingStep, setTaskLoadingStep] = useState<number | null>(null);
+  const [taskError, setTaskError] = useState<TaskError>(null);
 
   /*
    * CHAT
@@ -125,6 +70,7 @@ export default function RoomPage({
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
   const [chatLoading, setChatLoading] = useState(false);
+  const [chatError, setChatError] = useState<string | null>(null);
 
   /*
    * ROADMAP GENERATION
@@ -134,24 +80,18 @@ export default function RoomPage({
   const [minutesPerDay, setMinutesPerDay] = useState(30);
   const [detailLevel, setDetailLevel] = useState("detailed");
 
-  const [formStep, setFormStep] = useState<
-    "topic" | "prefs"
-  >("topic");
-
-  const [showNewRoadmapForm, setShowNewRoadmapForm] =
-    useState(false);
-
+  const [formStep, setFormStep] = useState<"topic" | "prefs">("topic");
+  const [showNewRoadmapForm, setShowNewRoadmapForm] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [roadmapError, setRoadmapError] = useState<string | null>(null);
 
   /*
    * ACTIVE TAB
    */
 
-  const [activeTab, setActiveTab] = useState<
-    "roadmap" | "chat" | "members"
-  >("roadmap");
+  const [activeTab, setActiveTab] = useState<RoomTab>("roadmap");
 
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   /*
    * GET ROOM ID
@@ -165,7 +105,7 @@ export default function RoomPage({
    * LOAD ROOM + MEMBERS
    */
 
-  const loadRoomAndMembers = async () => {
+  const loadRoomAndMembers = useCallback(async () => {
     if (!roomId) return;
 
     const {
@@ -176,12 +116,11 @@ export default function RoomPage({
       setUserId(user.id);
     }
 
-    const { data: roomData, error: roomError } =
-      await supabase
-        .from("rooms")
-        .select("name, invite_code, created_by")
-        .eq("id", roomId)
-        .single();
+    const { data: roomData, error: roomError } = await supabase
+      .from("rooms")
+      .select("name, invite_code, created_by")
+      .eq("id", roomId)
+      .single();
 
     if (roomError) {
       console.error("ROOM LOAD ERROR:", roomError);
@@ -190,11 +129,10 @@ export default function RoomPage({
 
     setRoom(roomData);
 
-    const { data: memberRows, error: memberError } =
-      await supabase
-        .from("room_members")
-        .select("user_id")
-        .eq("room_id", roomId);
+    const { data: memberRows, error: memberError } = await supabase
+      .from("room_members")
+      .select("user_id")
+      .eq("room_id", roomId);
 
     if (memberError) {
       console.error("MEMBERS LOAD ERROR:", memberError);
@@ -208,11 +146,10 @@ export default function RoomPage({
 
     const userIds = memberRows.map((m) => m.user_id);
 
-    const { data: profileRows, error: profileError } =
-      await supabase
-        .from("profiles")
-        .select("id, username")
-        .in("id", userIds);
+    const { data: profileRows, error: profileError } = await supabase
+      .from("profiles")
+      .select("id, username")
+      .in("id", userIds);
 
     if (profileError) {
       console.error("PROFILE LOAD ERROR:", profileError);
@@ -222,27 +159,23 @@ export default function RoomPage({
       memberRows.map((m) => ({
         user_id: m.user_id,
         username:
-          profileRows?.find(
-            (p) => p.id === m.user_id
-          )?.username ?? "Unknown",
+          profileRows?.find((p) => p.id === m.user_id)?.username ?? "Unknown",
       }))
     );
-  };
+  }, [roomId, supabase]);
 
   /*
    * LOAD ROADMAP LIST
    */
 
-  const loadRoadmapsList = async () => {
+  const loadRoadmapsList = useCallback(async () => {
     if (!roomId) return;
 
     const { data, error } = await supabase
       .from("roadmaps")
       .select("id, topic, created_at")
       .eq("room_id", roomId)
-      .order("created_at", {
-        ascending: false,
-      });
+      .order("created_at", { ascending: false });
 
     if (error) {
       console.error("ROADMAP LIST ERROR:", error);
@@ -252,100 +185,66 @@ export default function RoomPage({
     if (data) {
       setRoadmapsList(data);
 
-      if (
-        !activeRoadmapId &&
-        data.length > 0
-      ) {
+      if (!activeRoadmapId && data.length > 0) {
         setActiveRoadmapId(data[0].id);
       }
     }
-  };
+  }, [roomId, supabase, activeRoadmapId]);
 
   /*
    * LOAD ACTIVE ROADMAP
    */
 
-  const loadActiveRoadmapData = async (
-    roadmapId: string
-  ) => {
+  const loadActiveRoadmapData = useCallback(async (roadmapId: string) => {
     /*
      * ROADMAP STEPS
      */
 
-    const { data: roadmapData, error: roadmapError } =
-      await supabase
-        .from("roadmaps")
-        .select("steps")
-        .eq("id", roadmapId)
-        .single();
+    const { data: roadmapData, error: roadmapError } = await supabase
+      .from("roadmaps")
+      .select("steps")
+      .eq("id", roadmapId)
+      .single();
 
     if (roadmapError) {
-      console.error(
-        "ROADMAP DATA ERROR:",
-        roadmapError
-      );
+      console.error("ROADMAP DATA ERROR:", roadmapError);
     } else if (roadmapData) {
-      setSteps(
-        roadmapData.steps as Step[]
-      );
+      setSteps(roadmapData.steps as Step[]);
     }
 
     /*
      * STEP PROGRESS
      */
 
-    const {
-      data: progressData,
-      error: progressError,
-    } = await supabase
+    const { data: progressData, error: progressError } = await supabase
       .from("progress")
-      .select(
-        "step_id, user_id, completed"
-      )
+      .select("step_id, user_id, completed")
       .eq("roadmap_id", roadmapId);
 
     if (progressError) {
-      console.error(
-        "PROGRESS LOAD ERROR:",
-        progressError
-      );
+      console.error("PROGRESS LOAD ERROR:", progressError);
     } else {
-      setProgress(
-        (progressData ??
-          []) as ProgressRow[]
-      );
+      setProgress((progressData ?? []) as ProgressRow[]);
     }
 
     /*
      * TASKS
      */
 
-    const {
-      data: taskRows,
-      error: taskError,
-    } = await supabase
+    const { data: taskRows, error: taskError } = await supabase
       .from("tasks")
       .select("step_id, items")
       .eq("roadmap_id", roadmapId);
 
     if (taskError) {
-      console.error(
-        "TASK LOAD ERROR:",
-        taskError
-      );
+      console.error("TASK LOAD ERROR:", taskError);
     }
 
-    const map: Record<
-      number,
-      TaskItem[]
-    > = {};
+    const map: Record<number, TaskItem[]> = {};
 
-    (taskRows ?? []).forEach(
-      (row: any) => {
-        map[row.step_id] =
-          row.items ?? [];
-      }
-    );
+    (taskRows ?? []).forEach((row: { step_id: number; items: TaskItem[] }) => {
+      map[row.step_id] = row.items ?? [];
+    });
 
     setTasksByStep(map);
 
@@ -353,63 +252,40 @@ export default function RoomPage({
      * TASK PROGRESS
      */
 
-    const {
-      data: taskProgressData,
-      error: taskProgressError,
-    } = await supabase
+    const { data: taskProgressData, error: taskProgressError } = await supabase
       .from("task_progress")
-      .select(
-        "step_id, task_id, user_id, completed"
-      )
+      .select("step_id, task_id, user_id, completed")
       .eq("roadmap_id", roadmapId);
 
     if (taskProgressError) {
-      console.error(
-        "TASK PROGRESS LOAD ERROR:",
-        taskProgressError
-      );
+      console.error("TASK PROGRESS LOAD ERROR:", taskProgressError);
     } else {
-      setTaskProgress(
-        (taskProgressData ??
-          []) as TaskProgressRow[]
-      );
+      setTaskProgress((taskProgressData ?? []) as TaskProgressRow[]);
     }
-  };
+  }, [supabase]);
 
   /*
    * LOAD CHAT MESSAGES
    */
 
-  const loadMessages = async () => {
+  const loadMessages = useCallback(async () => {
     if (!roomId) return;
 
-    const {
-      data,
-      error,
-    } = await supabase
+    const { data, error } = await supabase
       .from("messages")
-      .select(
-        "id, username, content, is_ai, created_at"
-      )
+      .select("id, username, content, is_ai, created_at")
       .eq("room_id", roomId)
-      .order("created_at", {
-        ascending: true,
-      });
+      .order("created_at", { ascending: true });
 
     if (error) {
-      console.error(
-        "MESSAGES LOAD ERROR:",
-        error
-      );
+      console.error("MESSAGES LOAD ERROR:", error);
       return;
     }
 
     if (data) {
-      setMessages(
-        data as ChatMessage[]
-      );
+      setMessages(data as ChatMessage[]);
     }
-  };
+  }, [roomId, supabase]);
 
   /*
    * ROOM REALTIME
@@ -418,9 +294,13 @@ export default function RoomPage({
   useEffect(() => {
     if (!roomId) return;
 
-    loadRoomAndMembers();
-    loadRoadmapsList();
-    loadMessages();
+    // Defer the initial loads so the effect body stays free of
+    // synchronous state updates; the loaders are async anyway.
+    Promise.resolve().then(() => {
+      loadRoomAndMembers();
+      loadRoadmapsList();
+      loadMessages();
+    });
 
     /*
      * MEMBERS REALTIME
@@ -463,15 +343,10 @@ export default function RoomPage({
       .subscribe();
 
     return () => {
-      supabase.removeChannel(
-        memberChannel
-      );
-
-      supabase.removeChannel(
-        msgChannel
-      );
+      supabase.removeChannel(memberChannel);
+      supabase.removeChannel(msgChannel);
     };
-  }, [roomId]);
+  }, [roomId, supabase, loadRoomAndMembers, loadRoadmapsList, loadMessages]);
 
   /*
    * ACTIVE ROADMAP REALTIME
@@ -480,18 +355,16 @@ export default function RoomPage({
   useEffect(() => {
     if (!activeRoadmapId) return;
 
-    loadActiveRoadmapData(
-      activeRoadmapId
-    );
+    Promise.resolve().then(() => {
+      loadActiveRoadmapData(activeRoadmapId);
+    });
 
     /*
      * STEP PROGRESS REALTIME
      */
 
     const progressChannel = supabase
-      .channel(
-        `progress-${activeRoadmapId}`
-      )
+      .channel(`progress-${activeRoadmapId}`)
       .on(
         "postgres_changes",
         {
@@ -501,9 +374,7 @@ export default function RoomPage({
           filter: `roadmap_id=eq.${activeRoadmapId}`,
         },
         () => {
-          loadActiveRoadmapData(
-            activeRoadmapId
-          );
+          loadActiveRoadmapData(activeRoadmapId);
         }
       )
       .subscribe();
@@ -512,37 +383,27 @@ export default function RoomPage({
      * TASK PROGRESS REALTIME
      */
 
-    const taskProgressChannel =
-      supabase
-        .channel(
-          `task-progress-${activeRoadmapId}`
-        )
-        .on(
-          "postgres_changes",
-          {
-            event: "*",
-            schema: "public",
-            table: "task_progress",
-            filter: `roadmap_id=eq.${activeRoadmapId}`,
-          },
-          () => {
-            loadActiveRoadmapData(
-              activeRoadmapId
-            );
-          }
-        )
-        .subscribe();
+    const taskProgressChannel = supabase
+      .channel(`task-progress-${activeRoadmapId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "task_progress",
+          filter: `roadmap_id=eq.${activeRoadmapId}`,
+        },
+        () => {
+          loadActiveRoadmapData(activeRoadmapId);
+        }
+      )
+      .subscribe();
 
     return () => {
-      supabase.removeChannel(
-        progressChannel
-      );
-
-      supabase.removeChannel(
-        taskProgressChannel
-      );
+      supabase.removeChannel(progressChannel);
+      supabase.removeChannel(taskProgressChannel);
     };
-  }, [activeRoadmapId]);
+  }, [activeRoadmapId, supabase, loadActiveRoadmapData]);
 
   /*
    * GENERATE ROADMAP
@@ -552,32 +413,26 @@ export default function RoomPage({
     if (!topic.trim()) return;
 
     setLoading(true);
+    setRoadmapError(null);
 
     try {
-      const res = await fetch(
-        "/api/roadmap",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            topic,
-            roomId,
-            minutesPerDay,
-            detailLevel,
-          }),
-        }
-      );
+      const res = await fetch("/api/roadmap", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          topic,
+          roomId,
+          minutesPerDay,
+          detailLevel,
+        }),
+      });
 
       const data = await res.json();
 
       if (!res.ok) {
-        console.error(
-          "ROADMAP GENERATION ERROR:",
-          data
-        );
+        setRoadmapError(data.error ?? "Something went wrong. Try again.");
         return;
       }
 
@@ -588,15 +443,10 @@ export default function RoomPage({
       await loadRoadmapsList();
 
       if (data.id) {
-        setActiveRoadmapId(
-          data.id
-        );
+        setActiveRoadmapId(data.id);
       }
-    } catch (error) {
-      console.error(
-        "ROADMAP REQUEST ERROR:",
-        error
-      );
+    } catch {
+      setRoadmapError("Couldn't reach the server. Try again.");
     } finally {
       setLoading(false);
     }
@@ -606,18 +456,11 @@ export default function RoomPage({
    * DELETE ROADMAP
    */
 
-  const handleDeleteRoadmap = async (
-    roadmapId: string
-  ) => {
+  const handleDeleteRoadmap = async (roadmapId: string) => {
     try {
-      await deleteRoadmap(
-        roadmapId
-      );
+      await deleteRoadmap(roadmapId);
 
-      if (
-        activeRoadmapId ===
-        roadmapId
-      ) {
+      if (activeRoadmapId === roadmapId) {
         setActiveRoadmapId(null);
         setSteps([]);
         setProgress([]);
@@ -627,10 +470,7 @@ export default function RoomPage({
 
       await loadRoadmapsList();
     } catch (error) {
-      console.error(
-        "DELETE ROADMAP ERROR:",
-        error
-      );
+      console.error("DELETE ROADMAP ERROR:", error);
     }
   };
 
@@ -638,49 +478,29 @@ export default function RoomPage({
    * TOGGLE STEP
    */
 
-  const toggleStep = async (
-    stepId: number,
-    currentlyDone: boolean
-  ) => {
-    if (
-      !activeRoadmapId ||
-      !userId
-    ) {
-      return;
-    }
+  const toggleStep = async (stepId: number, currentlyDone: boolean) => {
+    if (!activeRoadmapId || !userId) return;
 
-    const newCompleted =
-      !currentlyDone;
+    const newCompleted = !currentlyDone;
 
-    const {
-      error,
-    } = await supabase
+    const { error } = await supabase
       .from("progress")
       .upsert(
         {
           room_id: roomId,
-          roadmap_id:
-            activeRoadmapId,
+          roadmap_id: activeRoadmapId,
           step_id: stepId,
           user_id: userId,
-          completed:
-            newCompleted,
-          completed_at:
-            newCompleted
-              ? new Date().toISOString()
-              : null,
+          completed: newCompleted,
+          completed_at: newCompleted ? new Date().toISOString() : null,
         },
         {
-          onConflict:
-            "roadmap_id,step_id,user_id",
+          onConflict: "roadmap_id,step_id,user_id",
         }
       );
 
     if (error) {
-      console.error(
-        "STEP PROGRESS ERROR:",
-        error
-      );
+      console.error("STEP PROGRESS ERROR:", error);
       return;
     }
 
@@ -689,26 +509,14 @@ export default function RoomPage({
      */
 
     setProgress((prev) => {
-      const existing =
-        prev.find(
-          (p) =>
-            p.step_id ===
-              stepId &&
-            p.user_id ===
-              userId
-        );
+      const existing = prev.find(
+        (p) => p.step_id === stepId && p.user_id === userId
+      );
 
       if (existing) {
         return prev.map((p) =>
-          p.step_id ===
-              stepId &&
-          p.user_id ===
-              userId
-            ? {
-                ...p,
-                completed:
-                  newCompleted,
-              }
+          p.step_id === stepId && p.user_id === userId
+            ? { ...p, completed: newCompleted }
             : p
         );
       }
@@ -718,8 +526,7 @@ export default function RoomPage({
         {
           step_id: stepId,
           user_id: userId,
-          completed:
-            newCompleted,
+          completed: newCompleted,
         },
       ];
     });
@@ -734,46 +541,29 @@ export default function RoomPage({
     taskId: number,
     currentlyDone: boolean
   ) => {
-    if (
-      !activeRoadmapId ||
-      !userId
-    ) {
-      return;
-    }
+    if (!activeRoadmapId || !userId) return;
 
-    const newCompleted =
-      !currentlyDone;
+    const newCompleted = !currentlyDone;
 
-    const {
-      error,
-    } = await supabase
+    const { error } = await supabase
       .from("task_progress")
       .upsert(
         {
           room_id: roomId,
-          roadmap_id:
-            activeRoadmapId,
+          roadmap_id: activeRoadmapId,
           step_id: stepId,
           task_id: taskId,
           user_id: userId,
-          completed:
-            newCompleted,
-          completed_at:
-            newCompleted
-              ? new Date().toISOString()
-              : null,
+          completed: newCompleted,
+          completed_at: newCompleted ? new Date().toISOString() : null,
         },
         {
-          onConflict:
-            "roadmap_id,step_id,task_id,user_id",
+          onConflict: "roadmap_id,step_id,task_id,user_id",
         }
       );
 
     if (error) {
-      console.error(
-        "TASK PROGRESS ERROR:",
-        error
-      );
+      console.error("TASK PROGRESS ERROR:", error);
       return;
     }
 
@@ -782,30 +572,19 @@ export default function RoomPage({
      */
 
     setTaskProgress((prev) => {
-      const existing =
-        prev.find(
-          (p) =>
-            p.step_id ===
-              stepId &&
-            p.task_id ===
-              taskId &&
-            p.user_id ===
-              userId
-        );
+      const existing = prev.find(
+        (p) =>
+          p.step_id === stepId &&
+          p.task_id === taskId &&
+          p.user_id === userId
+      );
 
       if (existing) {
         return prev.map((p) =>
-          p.step_id ===
-              stepId &&
-          p.task_id ===
-              taskId &&
-          p.user_id ===
-              userId
-            ? {
-                ...p,
-                completed:
-                  newCompleted,
-              }
+          p.step_id === stepId &&
+          p.task_id === taskId &&
+          p.user_id === userId
+            ? { ...p, completed: newCompleted }
             : p
         );
       }
@@ -816,8 +595,7 @@ export default function RoomPage({
           step_id: stepId,
           task_id: taskId,
           user_id: userId,
-          completed:
-            newCompleted,
+          completed: newCompleted,
         },
       ];
     });
@@ -827,75 +605,54 @@ export default function RoomPage({
    * GENERATE TASKS
    */
 
-  const generateTasksForStep = async (
-    step: Step
-  ) => {
-    if (!activeRoadmapId) {
-      return;
-    }
+  const generateTasksForStep = async (step: Step) => {
+    if (!activeRoadmapId) return;
 
-    setTaskLoadingStep(
-      step.id
-    );
+    setTaskLoadingStep(step.id);
+    setTaskError(null);
 
     try {
-      const res = await fetch(
-        "/api/tasks",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            roomId,
-            roadmapId:
-              activeRoadmapId,
-            stepId: step.id,
-            stepTitle:
-              step.title,
-            stepDescription:
-              step.description,
-          }),
-        }
-      );
+      const res = await fetch("/api/tasks", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId,
+          roadmapId: activeRoadmapId,
+          stepId: step.id,
+          stepTitle: step.title,
+          stepDescription: step.description,
+        }),
+      });
 
-      const data =
-        await res.json();
+      const data = await res.json();
 
       if (!res.ok) {
-        console.error(
-          "TASK GENERATION ERROR:",
-          data
-        );
+        setTaskError({
+          stepId: step.id,
+          message: data.error ?? "Couldn't generate tasks. Try again.",
+        });
         return;
       }
 
-      setTasksByStep(
-        (prev) => ({
-          ...prev,
-          [step.id]:
-            data.items ?? [],
-        })
-      );
+      setTasksByStep((prev) => ({
+        ...prev,
+        [step.id]: data.items ?? [],
+      }));
 
       /*
-       * Reload task progress
-       * after generating tasks.
+       * Reload task progress after generating tasks.
        */
 
-      await loadActiveRoadmapData(
-        activeRoadmapId
-      );
-    } catch (error) {
-      console.error(
-        "TASK REQUEST ERROR:",
-        error
-      );
+      await loadActiveRoadmapData(activeRoadmapId);
+    } catch {
+      setTaskError({
+        stepId: step.id,
+        message: "Couldn't reach the server. Try again.",
+      });
     } finally {
-      setTaskLoadingStep(
-        null
-      );
+      setTaskLoadingStep(null);
     }
   };
 
@@ -903,51 +660,27 @@ export default function RoomPage({
    * DELETE TASKS
    */
 
-  const handleDeleteTasks = async (
-    stepId: number
-  ) => {
-    if (!activeRoadmapId) {
-      return;
-    }
+  const handleDeleteTasks = async (stepId: number) => {
+    if (!activeRoadmapId) return;
 
     try {
-      await deleteTasks(
-        activeRoadmapId,
-        stepId
-      );
+      await deleteTasks(activeRoadmapId, stepId);
 
-      setTasksByStep(
-        (prev) => {
-          const copy = {
-            ...prev,
-          };
+      setTasksByStep((prev) => {
+        const copy = { ...prev };
+        delete copy[stepId];
+        return copy;
+      });
 
-          delete copy[
-            stepId
-          ];
-
-          return copy;
-        }
-      );
+      setTaskError((prev) => (prev?.stepId === stepId ? null : prev));
 
       /*
-       * Remove old task progress
-       * from local state.
+       * Remove old task progress from local state.
        */
 
-      setTaskProgress(
-        (prev) =>
-          prev.filter(
-            (p) =>
-              p.step_id !==
-              stepId
-          )
-      );
+      setTaskProgress((prev) => prev.filter((p) => p.step_id !== stepId));
     } catch (error) {
-      console.error(
-        "DELETE TASKS ERROR:",
-        error
-      );
+      console.error("DELETE TASKS ERROR:", error);
     }
   };
 
@@ -956,66 +689,42 @@ export default function RoomPage({
    */
 
   const sendMessage = async () => {
-    if (
-      !chatInput.trim() ||
-      chatLoading
-    ) {
-      return;
-    }
-
-    console.log(
-      "SEND MESSAGE",
-      new Date().toISOString(),
-      Math.random()
-    );
+    if (!chatInput.trim() || chatLoading) return;
 
     setChatLoading(true);
+    setChatError(null);
 
     try {
-      const res = await fetch(
-        "/api/chat",
-        {
-          method: "POST",
-          headers: {
-            "Content-Type":
-              "application/json",
-          },
-          body: JSON.stringify({
-            roomId,
-            content:
-              chatInput.trim(),
-          }),
-        }
-      );
+      const res = await fetch("/api/chat", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({
+          roomId,
+          content: chatInput.trim(),
+        }),
+      });
 
-      const result =
-        await res.json();
+      const result = await res.json();
 
       if (!res.ok) {
-        console.error(
-          "CHAT ERROR:",
-          result
-        );
+        setChatError(result.error ?? "Couldn't send your message. Try again.");
         return;
       }
 
       setChatInput("");
 
       /*
-       * Realtime will normally
-       * update the messages.
+       * Realtime will normally update the messages.
        *
-       * This also ensures the
-       * current sender sees the
+       * This also ensures the current sender sees the
        * latest state immediately.
        */
 
       await loadMessages();
-    } catch (error) {
-      console.error(
-        "CHAT REQUEST FAILED:",
-        error
-      );
+    } catch {
+      setChatError("Couldn't reach the server. Try again.");
     } finally {
       setChatLoading(false);
     }
@@ -1025,52 +734,26 @@ export default function RoomPage({
    * COMPLETED USERS
    */
 
-  const getCompletedUsers = (
-    stepId: number
-  ) =>
+  const getCompletedUsers = (stepId: number) =>
     progress
-      .filter(
-        (p) =>
-          p.step_id ===
-            stepId &&
-          p.completed
-      )
+      .filter((p) => p.step_id === stepId && p.completed)
       .map(
         (p) =>
-          members.find(
-            (m) =>
-              m.user_id ===
-              p.user_id
-          )?.username ??
-          "?"
+          members.find((m) => m.user_id === p.user_id)?.username ?? "?"
       );
 
   /*
    * MEMBER PROGRESS
    */
 
-  const getMemberPercent = (
-    memberId: string
-  ) => {
-    if (
-      steps.length === 0
-    ) {
-      return 0;
-    }
+  const getMemberPercent = (memberId: string) => {
+    if (steps.length === 0) return 0;
 
-    const done =
-      progress.filter(
-        (p) =>
-          p.user_id ===
-            memberId &&
-          p.completed
-      ).length;
+    const done = progress.filter(
+      (p) => p.user_id === memberId && p.completed
+    ).length;
 
-    return Math.round(
-      (done /
-        steps.length) *
-        100
-    );
+    return Math.round((done / steps.length) * 100);
   };
 
   /*
@@ -1088,556 +771,89 @@ export default function RoomPage({
     );
   }
 
-  const isHost =
-    userId ===
-    room.created_by;
+  const isHost = userId === room.created_by;
 
-  const dayNumbers = [
-    ...new Set(
-      steps.map(
-        (s) => s.day
-      )
-    ),
-  ];
+  const dayNumbers = [...new Set(steps.map((s) => s.day))];
 
   return (
     <div className={`${geist.variable} ${youngSerif.variable} nx-bg flex h-screen flex-col text-white`}>
-      {/* ================================================= */}
       {/* NAVBAR */}
-      {/* ================================================= */}
 
-      <div className="shrink-0 border-b border-white/10 bg-black/30 backdrop-blur-xl">
-        <div className="mx-auto flex w-full max-w-4xl items-center justify-between gap-3 px-4 py-4 sm:px-6">
-          <div className="min-w-0">
-            <h1 className="font-display truncate text-xl">{room.name}</h1>
-            <p className="mt-1 flex items-center gap-1.5 text-[11px] tracking-[.14em] text-gray-500">
-              <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-purple-400" />
-              CODE{" "}
-              <span className="rounded-md border border-white/15 bg-white/5 px-1.5 py-0.5 font-mono text-[10px] tracking-normal text-purple-300">
-                {room.invite_code}
-              </span>
-            </p>
-          </div>
+      <RoomNavbar
+        roomName={room.name}
+        inviteCode={room.invite_code}
+        roomId={roomId}
+        activeTab={activeTab}
+        onTabChange={setActiveTab}
+      />
 
-          <div className="flex items-center gap-1">
-            <button
-              onClick={() => setActiveTab("roadmap")}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                activeTab === "roadmap"
-                  ? "bg-white font-semibold text-black"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Roadmap
-            </button>
-
-            <button
-              onClick={() => setActiveTab("chat")}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                activeTab === "chat"
-                  ? "bg-white font-semibold text-black"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Chat
-            </button>
-
-            <button
-              onClick={() => setActiveTab("members")}
-              className={`rounded-lg px-3 py-1.5 text-sm transition ${
-                activeTab === "members"
-                  ? "bg-white font-semibold text-black"
-                  : "text-gray-400 hover:text-white"
-              }`}
-            >
-              Members
-            </button>
-
-            <form action={leaveRoom.bind(null, roomId)}>
-              <button className="ml-2 rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition hover:border-red-400/40 hover:text-red-300">
-                Exit
-              </button>
-            </form>
-          </div>
-        </div>
-      </div>
-
-      {/* ================================================= */}
       {/* MAIN CONTENT */}
-      {/* ================================================= */}
 
       <div className="mx-auto w-full max-w-4xl flex-1 overflow-auto px-4 py-6 sm:px-6 sm:py-10">
-        {/* ================================================= */}
         {/* ROADMAP */}
-        {/* ================================================= */}
 
         {activeTab === "roadmap" && (
-          <div>
-            {/* RENAME ROOM */}
-
-            {isHost && (
-              <form
-                action={updateRoomName.bind(null, roomId)}
-                className="nx-glass nx-fade mb-8 flex gap-2 rounded-2xl p-4"
-              >
-                <input
-                  name="name"
-                  placeholder="Rename room"
-                  className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-2 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
-                />
-                <button className="rounded-xl bg-white px-4 py-2 text-sm font-semibold text-black transition hover:bg-gray-200">
-                  Rename
-                </button>
-              </form>
-            )}
-
-            {/* PROGRESS */}
-
-            {steps.length > 0 && (
-              <div className="nx-fade nx-fade-1 mb-8">
-                <h2 className="font-display mb-4 text-xl">Progress</h2>
-                <div className="flex flex-col gap-4">
-                  {members.map((m, i) => {
-                    const pct = getMemberPercent(m.user_id);
-
-                    return (
-                      <div key={m.user_id}>
-                        <div className="mb-2 flex items-center justify-between text-sm">
-                          <span className="flex items-center gap-2.5">
-                            <span className={`grid h-7 w-7 place-items-center rounded-full text-[10px] font-bold ${avatarColors[i % avatarColors.length]}`}>
-                              {initials(m.username)}
-                            </span>
-                            <span className="text-white">
-                              {m.username}
-                              {m.user_id === userId && <span className="ml-1 text-gray-500">(you)</span>}
-                            </span>
-                          </span>
-                          <span className="font-mono text-xs text-gray-400">{pct}%</span>
-                        </div>
-                        <div className="h-2 w-full overflow-hidden rounded-full border border-white/5 bg-white/5">
-                          <div
-                            className="grad-bar h-2 rounded-full transition-all duration-300"
-                            style={{ width: `${pct}%` }}
-                          />
-                        </div>
-                        {pct === 100 && <p className="mt-2 text-xs text-gray-500">Roadmap completed 🎉</p>}
-                      </div>
-                    );
-                  })}
-                </div>
-              </div>
-            )}
-
-            {/* ROADMAP LIST */}
-
-            <div className="mb-8">
-              <div className="mb-4 flex items-center justify-between">
-                <h2 className="font-display text-xl">Roadmaps</h2>
-                <button
-                  onClick={() => setShowNewRoadmapForm(true)}
-                  className="rounded-lg border border-white/10 px-3 py-1.5 text-xs text-gray-400 transition hover:border-purple-400/50 hover:text-purple-300"
-                >
-                  + New roadmap
-                </button>
-              </div>
-
-              {roadmapsList.length > 0 && (
-                <div className="mb-5 flex flex-wrap gap-2">
-                  {roadmapsList.map((r) => (
-                    <div
-                      key={r.id}
-                      className={`group flex items-center gap-1 rounded-xl border px-3 py-2 text-sm transition ${
-                        activeRoadmapId === r.id
-                          ? "border-white bg-white font-semibold text-black"
-                          : "border-white/10 bg-white/[.03] text-gray-300 hover:border-white/30"
-                      }`}
-                    >
-                      <button onClick={() => setActiveRoadmapId(r.id)}>{r.topic}</button>
-                      <button
-                        onClick={() => handleDeleteRoadmap(r.id)}
-                        className="ml-1 opacity-40 transition hover:opacity-100 hover:text-red-400"
-                      >
-                        ×
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-
-              {/* NEW ROADMAP FORM */}
-
-              {showNewRoadmapForm &&
-                (formStep === "topic" ? (
-                  <div className="mb-5 flex gap-2">
-                    <input
-                      value={topic}
-                      onChange={(e) => setTopic(e.target.value)}
-                      placeholder="Paste a topic or notes…"
-                      className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-2.5 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
-                    />
-                    <button
-                      onClick={() => topic.trim() && setFormStep("prefs")}
-                      className="rounded-xl bg-white px-5 py-2.5 text-sm font-semibold text-black transition hover:bg-gray-200"
-                    >
-                      Next
-                    </button>
-                  </div>
-                ) : (
-                  <div className="nx-glass nx-fade mb-5 flex flex-col gap-5 rounded-2xl p-5">
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-white">Minutes per day?</label>
-                      <input
-                        type="number"
-                        value={minutesPerDay}
-                        onChange={(e) => setMinutesPerDay(Number(e.target.value))}
-                        className="w-32 rounded-xl border border-white/10 bg-black/40 p-2 text-sm text-white outline-none transition focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
-                      />
-                    </div>
-
-                    <div>
-                      <label className="mb-2 block text-sm font-semibold text-white">Complexity?</label>
-                      <div className="flex flex-wrap gap-2">
-                        {["quick", "detailed", "thorough"].map((lvl) => (
-                          <button
-                            key={lvl}
-                            onClick={() => setDetailLevel(lvl)}
-                            className={`rounded-xl border px-3 py-1.5 text-sm transition ${
-                              detailLevel === lvl
-                                ? "grad-btn border-transparent font-semibold"
-                                : "border-white/10 bg-white/[.03] text-gray-400 hover:border-white/30 hover:text-white"
-                            }`}
-                          >
-                            {lvl}
-                          </button>
-                        ))}
-                      </div>
-                    </div>
-
-                    <div className="flex items-center gap-2">
-                      <button
-                        onClick={() => setFormStep("topic")}
-                        className="text-sm text-gray-400 underline transition hover:text-white"
-                      >
-                        Back
-                      </button>
-                      <button
-                        onClick={generateRoadmap}
-                        disabled={loading}
-                        className="grad-btn ml-auto rounded-xl px-5 py-2 text-sm font-bold transition hover:opacity-90 disabled:opacity-40"
-                      >
-                        {loading ? "Generating…" : "Generate"}
-                      </button>
-                    </div>
-                  </div>
-                ))}
-            </div>
-
-            {/* ROADMAP STEPS */}
-
-            {activeRoadmapId && steps.length > 0 && (
-              <div className="flex flex-col gap-8">
-                {dayNumbers.map((dayNum) => (
-                  <div key={dayNum}>
-                    <h3 className="mb-3 flex items-center gap-3 font-display text-lg">
-                      Day {dayNum}
-                      <span className="h-px flex-1 bg-gradient-to-r from-white/20 to-transparent" />
-                    </h3>
-
-                    <ul className="flex flex-col gap-3">
-                      {steps
-                        .filter((s) => s.day === dayNum)
-                        .map((step) => {
-                          const myDone = progress.some(
-                            (p) => p.step_id === step.id && p.user_id === userId && p.completed
-                          );
-
-                          const completedByUsernames = getCompletedUsers(step.id);
-                          const stepTasks = tasksByStep[step.id];
-
-                          return (
-                            <li
-                              key={step.id}
-                              className="nx-glass group rounded-2xl p-5 transition hover:border-white/20"
-                            >
-                              <div className="flex items-start gap-3.5">
-                                {/* STEP CHECKBOX */}
-
-                                <input
-                                  type="checkbox"
-                                  checked={myDone}
-                                  onChange={() => toggleStep(step.id, myDone)}
-                                  className="mt-1 h-4 w-4 cursor-pointer accent-purple-400"
-                                />
-
-                                <div className="flex-1">
-                                  {/* STEP TITLE */}
-
-                                  <p
-                                    className={
-                                      myDone
-                                        ? "font-semibold text-gray-500 line-through"
-                                        : "font-semibold text-white"
-                                    }
-                                  >
-                                    {step.title}
-                                  </p>
-
-                                  {/* DESCRIPTION */}
-
-                                  <p className="mt-1 text-sm text-gray-300">{step.description}</p>
-
-                                  {/* TIME */}
-
-                                  <p className="mt-1 text-xs text-gray-500">⏱ {step.estimated_minutes} min</p>
-
-                                  {/* COMPLETED USERS */}
-
-                                  {completedByUsernames.length > 0 && (
-                                    <div className="mt-2.5 flex flex-wrap items-center gap-1.5">
-                                      <span className="text-xs text-gray-500">Completed by:</span>
-                                      {completedByUsernames.map((u, idx) => (
-                                        <span
-                                          key={`${u}-${idx}`}
-                                          className="rounded-full border border-emerald-400/30 bg-emerald-400/10 px-2 py-0.5 text-[10px] text-emerald-300"
-                                        >
-                                          {u}
-                                        </span>
-                                      ))}
-                                    </div>
-                                  )}
-
-                                  {/* TASKS */}
-
-                                  <div className="mt-4 border-t border-white/10 pt-3">
-                                    {!stepTasks ? (
-                                      <button
-                                        onClick={() => generateTasksForStep(step)}
-                                        disabled={taskLoadingStep === step.id}
-                                        className="text-xs text-gray-400 underline underline-offset-2 transition hover:text-purple-300"
-                                      >
-                                        {taskLoadingStep === step.id
-                                          ? "Generating…"
-                                          : "Generate tasks & mini-project"}
-                                      </button>
-                                    ) : (
-                                      <div>
-                                        {/* TASK HEADER */}
-
-                                        <div className="mb-3 flex items-center justify-between">
-                                          <p className="text-xs font-semibold uppercase tracking-wider text-gray-400">
-                                            Tasks & Projects
-                                          </p>
-                                          <div className="flex gap-3">
-                                            <button
-                                              onClick={() => generateTasksForStep(step)}
-                                              className="text-xs text-gray-400 underline transition hover:text-purple-300"
-                                            >
-                                              Regenerate
-                                            </button>
-                                            <button
-                                              onClick={() => handleDeleteTasks(step.id)}
-                                              className="text-xs text-red-400 underline transition hover:text-red-300"
-                                            >
-                                              Delete
-                                            </button>
-                                          </div>
-                                        </div>
-
-                                        {/* TASK LIST */}
-
-                                        <ul className="flex flex-col gap-2">
-                                          {stepTasks.map((t) => {
-                                            const taskDone = taskProgress.some(
-                                              (p) =>
-                                                p.step_id === step.id &&
-                                                p.task_id === t.id &&
-                                                p.user_id === userId &&
-                                                p.completed
-                                            );
-
-                                            return (
-                                              <li
-                                                key={t.id}
-                                                className="flex items-start gap-3 rounded-xl border border-white/5 bg-white/[.03] p-3 text-xs text-white transition hover:border-white/15"
-                                              >
-                                                {/* TASK CHECKBOX */}
-
-                                                <input
-                                                  type="checkbox"
-                                                  checked={taskDone}
-                                                  onChange={() => toggleTask(step.id, t.id, taskDone)}
-                                                  className="mt-0.5 h-4 w-4 cursor-pointer accent-purple-400"
-                                                />
-
-                                                <div className="flex-1">
-                                                  <span
-                                                    className={
-                                                      t.type === "project"
-                                                        ? "font-semibold text-purple-400"
-                                                        : "font-semibold text-blue-400"
-                                                    }
-                                                  >
-                                                    [{t.type === "project" ? "Project" : "Task"}]
-                                                  </span>{" "}
-
-                                                  <span
-                                                    className={
-                                                      taskDone ? "text-gray-500 line-through" : "text-white"
-                                                    }
-                                                  >
-                                                    {t.title}
-                                                  </span>
-
-                                                  {t.description && (
-                                                    <p
-                                                      className={
-                                                        taskDone
-                                                          ? "mt-1 text-gray-600 line-through"
-                                                          : "mt-1 text-gray-400"
-                                                      }
-                                                    >
-                                                      {t.description}
-                                                    </p>
-                                                  )}
-                                                </div>
-                                              </li>
-                                            );
-                                          })}
-                                        </ul>
-                                      </div>
-                                    )}
-                                  </div>
-                                </div>
-                              </div>
-                            </li>
-                          );
-                        })}
-                    </ul>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
+          <RoadmapPanel
+            roomId={roomId}
+            isHost={isHost}
+            members={members}
+            userId={userId}
+            steps={steps}
+            progress={progress}
+            dayNumbers={dayNumbers}
+            roadmapsList={roadmapsList}
+            activeRoadmapId={activeRoadmapId}
+            onSelectRoadmap={setActiveRoadmapId}
+            onDeleteRoadmap={handleDeleteRoadmap}
+            showNewRoadmapForm={showNewRoadmapForm}
+            formStep={formStep}
+            topic={topic}
+            minutesPerDay={minutesPerDay}
+            detailLevel={detailLevel}
+            loading={loading}
+            roadmapError={roadmapError}
+            onOpenNewRoadmapForm={() => setShowNewRoadmapForm(true)}
+            onCloseNewRoadmapForm={() => setShowNewRoadmapForm(false)}
+            onTopicChange={setTopic}
+            onGoToPrefs={() => setFormStep("prefs")}
+            onBackToTopic={() => setFormStep("topic")}
+            onMinutesChange={setMinutesPerDay}
+            onDetailLevelChange={setDetailLevel}
+            onGenerateRoadmap={generateRoadmap}
+            tasksByStep={tasksByStep}
+            taskProgress={taskProgress}
+            taskLoadingStep={taskLoadingStep}
+            taskError={taskError}
+            onGenerateTasksForStep={generateTasksForStep}
+            onDeleteTasksForStep={handleDeleteTasks}
+            onToggleStep={toggleStep}
+            onToggleTask={toggleTask}
+            getCompletedUsers={getCompletedUsers}
+            memberPercent={getMemberPercent}
+          />
         )}
 
-        {/* ================================================= */}
         {/* CHAT */}
-        {/* ================================================= */}
 
         {activeTab === "chat" && (
-          <div className="flex h-full flex-col">
-            {/* MESSAGE AREA */}
-
-            <div className="nx-glass mb-4 flex-1 overflow-auto rounded-2xl p-5">
-              <div className="flex flex-col gap-3">
-                {messages.length === 0 ? (
-                  <div className="flex h-full flex-col items-center justify-center text-center">
-                    <div className="pulse-dot mb-4 grid h-14 w-14 place-items-center rounded-2xl border border-purple-400/30 bg-purple-500/10 text-2xl">
-                      ✦
-                    </div>
-                    <p className="font-display text-xl">Start a conversation</p>
-                    <p className="mt-1 text-sm text-gray-500">
-                      Ask the AI tutor something or start discussing with your group.
-                    </p>
-                  </div>
-                ) : (
-                  messages.map((m) => (
-                    <div key={m.id} className={`flex ${m.is_ai ? "justify-start" : "justify-end"}`}>
-                      <div
-                        className={`max-w-[80%] rounded-2xl px-4 py-3 ${
-                          m.is_ai
-                            ? "border border-purple-400/20 bg-purple-500/10"
-                            : "bg-white text-black shadow-lg"
-                        }`}
-                      >
-                        <div
-                          className={`mb-1 flex items-center gap-1.5 text-xs font-bold tracking-wide ${
-                            m.is_ai ? "text-purple-300" : "text-black"
-                          }`}
-                        >
-                          {m.is_ai && <span className="pulse-dot inline-block h-1.5 w-1.5 rounded-full bg-purple-400" />}
-                          {m.is_ai ? "AI Tutor" : m.username}
-                        </div>
-
-                        <p
-                          className={`whitespace-pre-wrap text-sm leading-6 ${
-                            m.is_ai ? "text-gray-200" : "text-black"
-                          }`}
-                        >
-                          {m.content}
-                        </p>
-
-                        <p className="mt-2 text-[10px] text-gray-500">
-                          {new Date(m.created_at).toLocaleTimeString([], {
-                            hour: "2-digit",
-                            minute: "2-digit",
-                          })}
-                        </p>
-                      </div>
-                    </div>
-                  ))
-                )}
-              </div>
-            </div>
-
-            {/* CHAT INPUT */}
-
-            <div className="flex items-center gap-3 pb-2">
-              <input
-                value={chatInput}
-                onChange={(e) => setChatInput(e.target.value)}
-                onKeyDown={(e) => {
-                  if (e.key === "Enter" && !e.shiftKey) {
-                    e.preventDefault();
-                    sendMessage();
-                  }
-                }}
-                placeholder="Ask the tutor or chat with your group…"
-                className="flex-1 rounded-xl border border-white/10 bg-black/40 px-4 py-3 text-sm text-white outline-none transition placeholder:text-gray-600 focus:border-purple-400/60 focus:ring-2 focus:ring-purple-500/20"
-              />
-
-              <button
-                onClick={sendMessage}
-                disabled={chatLoading || !chatInput.trim()}
-                className="grad-btn rounded-xl px-5 py-3 text-sm font-bold transition hover:opacity-90 disabled:cursor-not-allowed disabled:opacity-40"
-              >
-                {chatLoading ? "Thinking…" : "Send"}
-              </button>
-            </div>
-          </div>
+          <ChatPanel
+            messages={messages}
+            input={chatInput}
+            onInputChange={setChatInput}
+            onSend={sendMessage}
+            loading={chatLoading}
+            error={chatError}
+          />
         )}
 
-        {/* ================================================= */}
         {/* MEMBERS */}
-        {/* ================================================= */}
 
         {activeTab === "members" && (
-          <div>
-            <h2 className="font-display mb-4 text-xl">Room Members ({members.length})</h2>
-
-            <ul className="nx-glass flex flex-col gap-3 rounded-2xl p-4">
-              {members.map((m, i) => {
-                const pct = getMemberPercent(m.user_id);
-                return (
-                  <li
-                    key={m.user_id}
-                    className="flex items-center justify-between rounded-xl border border-white/5 bg-white/[.02] p-3.5 transition hover:border-white/15"
-                  >
-                    <span className="flex items-center gap-3">
-                      <span className={`grid h-8 w-8 place-items-center rounded-full text-[11px] font-bold ${avatarColors[i % avatarColors.length]}`}>
-                        {initials(m.username)}
-                      </span>
-                      <span className="text-white">
-                        {m.username}
-                        {m.user_id === userId && <span className="ml-1 text-gray-500">(you)</span>}
-                      </span>
-                    </span>
-                    <span className="font-mono text-xs text-gray-500">{pct}% done</span>
-                  </li>
-                );
-              })}
-            </ul>
-          </div>
+          <MembersPanel
+            members={members}
+            userId={userId}
+            memberPercent={getMemberPercent}
+          />
         )}
       </div>
     </div>

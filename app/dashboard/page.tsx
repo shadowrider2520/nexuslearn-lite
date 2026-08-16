@@ -1,13 +1,19 @@
 "use client";
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { createRoom, joinRoom } from "../actions";
 
+type RoomRow = { id: string; name: string };
+type MembershipRow = { room_id: string; rooms: RoomRow | RoomRow[] | null };
+
+const toRoomRow = (value: RoomRow | RoomRow[] | null): RoomRow | null =>
+  Array.isArray(value) ? value[0] ?? null : value;
+
 export default function Home() {
-  const [rooms, setRooms] = useState<{ id: string; name: string }[]>([]);
+  const [rooms, setRooms] = useState<RoomRow[]>([]);
   const router = useRouter();
-  const supabase = createClient();
+  const supabase = useMemo(() => createClient(), []);
 
   const handleLogout = async () => {
     await supabase.auth.signOut();
@@ -28,10 +34,17 @@ export default function Home() {
         .select("room_id, rooms(id, name)")
         .eq("user_id", user.id);
 
-      if (data) setRooms(data.map((r: any) => r.rooms));
+      if (data) {
+        const rows = data as unknown as MembershipRow[];
+        setRooms(
+          rows
+            .map((row) => toRoomRow(row.rooms))
+            .filter((room): room is RoomRow => room !== null)
+        );
+      }
     };
     load();
-  }, []);
+  }, [router, supabase]);
 
   return (
     <div className="nx-bg min-h-screen text-white">

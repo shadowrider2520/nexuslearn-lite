@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import type { TaskItem } from "@/lib/types";
 
 const SYSTEM_PROMPT = `You generate practical tasks and mini-projects for a single study step.
 
@@ -14,43 +15,107 @@ Respond ONLY with valid JSON, no markdown, no preamble:
 "type" must be either "task" (a quick practice exercise) or "project" (a slightly bigger mini-project).`;
 
 export async function POST(req: Request) {
-  const { roomId, roadmapId, stepId, stepTitle, stepDescription } = await req.json();
-
-  const res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
-    },
-    body: JSON.stringify({
-      model: "llama-3.3-70b-versatile",
-      messages: [
-        { role: "system", content: SYSTEM_PROMPT },
-        { role: "user", content: `Step: ${stepTitle}\nDescription: ${stepDescription}` },
-      ],
-      temperature: 0.5,
-    }),
-  });
-
-  const data = await res.json();
-  let parsed;
+  let body: {
+    roomId?: string;
+    roadmapId?: string;
+    stepId?: number;
+    stepTitle?: string;
+    stepDescription?: string;
+  };
   try {
-    parsed = JSON.parse(data.choices[0].message.content);
+    body = await req.json();
   } catch {
-    return NextResponse.json({ error: "AI returned invalid JSON" }, { status: 500 });
+    return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
+  }
+
+  const { roomId, roadmapId, stepId, stepTitle, stepDescription } = body;
+  if (!roomId || !roadmapId || stepId == null || !stepTitle) {
+    return NextResponse.json(
+      { error: "roomId, roadmapId, stepId and stepTitle are required" },
+      { status: 400 }
+    );
   }
 
   const supabase = await createClient();
-  const { error } = await supabase
-    .from("tasks")
-    .upsert(
-      { room_id: roomId, roadmap_id: roadmapId, step_id: stepId, items: parsed.items },
-      { onConflict: "roadmap_id,step_id" }
+
+  const {
+    data: { user },
+  } = await supabase.auth.getUser();
+
+  if (!user) {
+    return NextResponse.json({ error: "Not logged in" }, { status: 401 });
+  }
+
+  const { data: membership } = await supabase
+    .from("room_members")
+    .select("user_id")
+    .eq("room_id", roomId)
+    .eq("user_id", user.id)
+    .maybeSingle();
+
+  if (!membership) {
+    return NextResponse.json(
+      { error: "You are not a member of this room" },
+      { status: 403 }
     );
+  }
+
+  let res: Response;
+  try {
+    res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
+      method: "POST",
+      headers: {
+        "Content-Type": "application/json",
+        Authorization: `Bearer ${process.env.GROQ_API_KEY}`,
+      },
+      body: JSON.stringify({
+        model: "llama-3.3-70b-versatile",
+        messages: [
+          { role: "system", content: SYSTEM_PROMPT },
+          {
+            role: "user",
+            content: `Step: ${stepTitle}\nDescription: ${stepDescription ?? ""}`,
+          },
+        ],
+        temperature: 0.5,
+      }),
+    });
+  } catch {
+    return NextResponse.json(
+      { error: "AI service is unreachable, try again" },
+      { status: 502 }
+    );
+  }
+
+  if (!res.ok) {
+    return NextResponse.json(
+      { error: "AI service returned an error, try again" },
+      { status: 502 }
+    );
+  }
+
+  const data = await res.json();
+
+  let items: TaskItem[];
+  try {
+    const parsed = JSON.parse(data.choices[0].message.content);
+    if (!Array.isArray(parsed?.items)) {
+      throw new Error("Unexpected shape");
+    }
+    items = parsed.items;
+  } catch {
+    return NextResponse.json(
+      { error: "AI returned invalid JSON" },
+      { status: 500 }
+    );
+  }
+
+  const { error } = await supabase.from("tasks").upsert(
+    { room_id: roomId, roadmap_id: roadmapId, step_id: stepId, items },
+    { onConflict: "roadmap_id,step_id" }
+  );
 
   if (error) return NextResponse.json({ error: error.message }, { status: 500 });
 
-  return NextResponse.json({ items: parsed.items });
+  return NextResponse.json({ items });
 }
-
-// upsert: insert if not duplicate exists else update that row
