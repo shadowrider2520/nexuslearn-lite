@@ -120,8 +120,13 @@ export async function POST(req: Request) {
   }
 
   if (!res.ok) {
+    let detail = res.statusText;
+    try {
+      const errBody = await res.json();
+      detail = errBody?.error?.message ?? res.statusText;
+    } catch {}
     return NextResponse.json(
-      { error: "AI service returned an error, try again" },
+      { error: `AI service error (${res.status}): ${detail}` },
       { status: 502 }
     );
   }
