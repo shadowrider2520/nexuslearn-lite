@@ -20,7 +20,7 @@ Live at **https://nexuslearn-lite-ecru.vercel.app/**
 
 - **Next.js 16** (App Router, Server Actions, route handlers)
 - **Supabase** — Postgres, Auth, Realtime
-- **Groq** — `llama-3.3-70b-versatile` powers the roadmap generator, task generator, and tutor
+- **Groq** — `openai/gpt-oss-120b` powers the roadmap generator, task generator, and tutor (override with the `GROQ_MODEL` env var)
 - **Tailwind CSS v4**
 
 ## Local setup
@@ -47,7 +47,8 @@ Live at **https://nexuslearn-lite-ecru.vercel.app/**
    ```
 
    `NEXT_PUBLIC_SUPABASE_URL` and `NEXT_PUBLIC_SUPABASE_ANON_KEY` come from
-   Supabase → Settings → API. `GROQ_API_KEY` comes from Groq.
+   Supabase → Settings → API. `GROQ_API_KEY` comes from Groq. Optionally set
+   `GROQ_MODEL` to override the AI model (defaults to `openai/gpt-oss-120b`).
 
 5. Run the dev server:
 
@@ -76,7 +77,7 @@ npm test         # unit tests (vitest) for the AI helpers
 ## Deploy on Vercel
 
 1. Push this repo to GitHub and import it at https://vercel.com
-2. Add the three env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GROQ_API_KEY`)
+2. Add the three env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GROQ_API_KEY`) — optionally `GROQ_MODEL`
 3. Deploy — Vercel detects Next.js automatically
 
 ## Project structure
