@@ -12,7 +12,7 @@ describe("parseChatCommand", () => {
   it("allows a summary without extra text", () => {
     expect(parseChatCommand("#summary")).toEqual({
       type: "summary",
-      prompt: "Summarize the group’s recent study discussion and give the next best action.",
+      prompt: "Summarize the group's recent study discussion and give the next best action.",
     });
   });
 
