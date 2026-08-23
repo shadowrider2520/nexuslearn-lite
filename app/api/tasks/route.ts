@@ -19,8 +19,6 @@ export async function POST(req: Request) {
     roomId?: string;
     roadmapId?: string;
     stepId?: number;
-    stepTitle?: string;
-    stepDescription?: string;
   };
   try {
     body = await req.json();
@@ -28,12 +26,16 @@ export async function POST(req: Request) {
     return NextResponse.json({ error: "Invalid request body" }, { status: 400 });
   }
 
-  const { roomId, roadmapId, stepId, stepTitle, stepDescription } = body;
-  if (!roomId || !roadmapId || stepId == null || !stepTitle) {
+  const { roomId, roadmapId, stepId } = body;
+  if (!roomId || !roadmapId || typeof stepId !== "number" || !Number.isInteger(stepId) || stepId < 1) {
     return NextResponse.json(
       { error: "roomId, roadmapId, stepId and stepTitle are required" },
       { status: 400 }
     );
+  }
+
+  if (!process.env.GROQ_API_KEY) {
+    return NextResponse.json({ error: "The AI service is not configured" }, { status: 503 });
   }
 
   const supabase = await createClient();
@@ -60,6 +62,23 @@ export async function POST(req: Request) {
     );
   }
 
+  const { data: roadmap, error: roadmapError } = await supabase
+    .from("roadmaps")
+    .select("room_id, steps")
+    .eq("id", roadmapId)
+    .maybeSingle();
+
+  if (roadmapError || !roadmap || roadmap.room_id !== roomId) {
+    return NextResponse.json({ error: "Roadmap not found in this room" }, { status: 404 });
+  }
+
+  const storedStep = (roadmap.steps as Array<{ id: number; title: string; description: string }>).find(
+    (step) => step.id === stepId
+  );
+  if (!storedStep) {
+    return NextResponse.json({ error: "Step not found in this roadmap" }, { status: 404 });
+  }
+
   let res: Response;
   try {
     res = await fetch("https://api.groq.com/openai/v1/chat/completions", {
@@ -74,7 +93,7 @@ export async function POST(req: Request) {
           { role: "system", content: SYSTEM_PROMPT },
           {
             role: "user",
-            content: `Step: ${stepTitle}\nDescription: ${stepDescription ?? ""}`,
+              content: `Step: ${storedStep.title}\nDescription: ${storedStep.description ?? ""}`,
           },
         ],
         temperature: 0.5,

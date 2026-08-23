@@ -46,8 +46,9 @@ async function generateUniqueInviteCode(
 export async function createRoom(formData: FormData) {
   const { supabase, user } = await requireUser();
 
-  const name = formData.get("name") as string;
-  if (!name || !name.trim()) throw new Error("Room name is required");
+  const name = (formData.get("name") as string | null)?.trim();
+  if (!name) throw new Error("Room name is required");
+  if (name.length > 80) throw new Error("Room names must be 80 characters or fewer");
 
   const inviteCode = await generateUniqueInviteCode(supabase);
 
@@ -68,38 +69,35 @@ export async function createRoom(formData: FormData) {
 }
 
 export async function joinRoom(formData: FormData) {
-  const { supabase, user } = await requireUser();
+  const { supabase } = await requireUser();
 
-  const code = (formData.get("code") as string).toUpperCase();
+  const code = (formData.get("code") as string | null)?.trim().toUpperCase();
   if (!code) throw new Error("Invite code is required");
 
-  const { data: room, error } = await supabase
-    .from("rooms")
-    .select("id")
-    .eq("invite_code", code)
-    .single();
+  const { data: roomId, error } = await supabase.rpc("join_room_by_invite_code", {
+    invite_code_input: code,
+  });
 
-  if (error || !room) throw new Error("Room not found");
+  if (error || !roomId) throw new Error(error?.message ?? "Room not found");
 
-  const alreadyMember = await isRoomMember(supabase, room.id, user.id);
-  if (!alreadyMember) {
-    await supabase.from("room_members").insert({
-      room_id: room.id,
-      user_id: user.id,
-    });
-  }
-
-  redirect(`/room/${room.id}`);
+  redirect(`/room/${roomId}`);
 }
 
 export async function updateRoomName(roomId: string, formData: FormData) {
   const { supabase, user } = await requireUser();
 
-  const name = formData.get("name") as string;
-  if (!name || !name.trim()) throw new Error("Room name is required");
+  const name = (formData.get("name") as string | null)?.trim();
+  if (!name) throw new Error("Room name is required");
+  if (name.length > 80) throw new Error("Room names must be 80 characters or fewer");
 
-  if (!(await isRoomMember(supabase, roomId, user.id))) {
-    throw new Error("You are not a member of this room");
+  const { data: room } = await supabase
+    .from("rooms")
+    .select("created_by")
+    .eq("id", roomId)
+    .maybeSingle();
+
+  if (!room || room.created_by !== user.id) {
+    throw new Error("Only the room host can rename this room");
   }
 
   const { error } = await supabase.from("rooms").update({ name }).eq("id", roomId);

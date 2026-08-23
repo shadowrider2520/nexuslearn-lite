@@ -21,6 +21,16 @@ export type ChatMessage = {
   created_at: string;
 };
 
+export type RoomDocument = {
+  id: string;
+  file_name: string;
+  file_path: string;
+  file_size: number;
+  file_type: string | null;
+  uploaded_by: string;
+  created_at: string;
+};
+
 export type ProgressRow = {
   step_id: number;
   user_id: string;
@@ -51,4 +61,4 @@ export type Room = {
   created_by: string;
 };
 
-export type RoomTab = "roadmap" | "chat" | "members";
+export type RoomTab = "roadmap" | "chat" | "members" | "documents";

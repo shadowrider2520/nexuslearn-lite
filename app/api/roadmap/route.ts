@@ -20,12 +20,26 @@ export async function POST(req: Request) {
   }
 
   const { topic, roomId, minutesPerDay, detailLevel } = body;
-  if (!topic || !topic.trim() || !roomId) {
+  const normalizedTopic = typeof topic === "string" ? topic.trim() : "";
+  if (!normalizedTopic || !roomId) {
     return NextResponse.json(
       { error: "topic and roomId are required" },
       { status: 400 }
     );
   }
+
+  if (normalizedTopic.length > 5_000) {
+    return NextResponse.json({ error: "Topics and notes must be 5,000 characters or fewer" }, { status: 400 });
+  }
+
+  if (!process.env.GROQ_API_KEY) {
+    return NextResponse.json({ error: "The AI service is not configured" }, { status: 503 });
+  }
+
+  const safeMinutesPerDay = Math.min(360, Math.max(15, Number(minutesPerDay) || 30));
+  const safeDetailLevel = ["quick", "detailed", "thorough"].includes(detailLevel ?? "")
+    ? detailLevel!
+    : "detailed";
 
   const supabase = await createClient();
 
@@ -65,11 +79,11 @@ export async function POST(req: Request) {
           {
             role: "system",
             content: buildRoadmapSystemPrompt(
-              minutesPerDay ?? 30,
-              detailLevel ?? "detailed"
+              safeMinutesPerDay,
+              safeDetailLevel
             ),
           },
-          { role: "user", content: topic },
+          { role: "user", content: normalizedTopic },
         ],
         temperature: 0.4,
       }),
@@ -113,6 +127,9 @@ export async function POST(req: Request) {
   }
 
   const flatSteps = flattenRoadmap(roadmap);
+  if (flatSteps.length === 0 || flatSteps.length > 60) {
+    return NextResponse.json({ error: "AI returned an unusable roadmap. Please try again." }, { status: 500 });
+  }
 
   const { data: saved, error } = await supabase
     .from("roadmaps")

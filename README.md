@@ -31,10 +31,10 @@ Live at **https://nexuslearn-lite-ecru.vercel.app/**
    npm install
    ```
 
-2. Create a Supabase project (https://supabase.com) and apply the schema:
+2. Create a Supabase project (https://supabase.com) and apply both migrations in order:
 
    ```bash
-   # open supabase/migrations/0001_init.sql and run it in the SQL Editor,
+   # run 0001_init.sql and then 0002_production_hardening.sql in the SQL Editor,
    # or with the Supabase CLI: supabase db push
    ```
 
@@ -60,9 +60,11 @@ Live at **https://nexuslearn-lite-ecru.vercel.app/**
 
 ## Database schema
 
-The canonical schema lives in [`supabase/migrations/0001_init.sql`](supabase/migrations/0001_init.sql):
+The canonical schema lives in [`supabase/migrations/`](supabase/migrations/):
 `profiles`, `rooms`, `room_members`, `roadmaps`, `progress`, `tasks`, `task_progress`,
-and `messages`, plus row-level-security policies and the `whoami()` helper.
+`messages`, and `documents`, plus row-level-security policies. The hardening migration
+also adds secure invite-code joining, a private documents bucket with a 10 MB limit,
+and AI request throttling.
 
 ## Scripts
 
@@ -75,6 +77,11 @@ npm test         # unit tests (vitest) for the AI helpers
 ```
 
 ## Deploy on Vercel
+
+Before importing the repository, apply `0001_init.sql` and then
+`0002_production_hardening.sql` in the Supabase SQL Editor (or run `supabase db push`
+from a linked project). After deployment, add the production address to Supabase
+Authentication URL Configuration so sign-in redirects work correctly.
 
 1. Push this repo to GitHub and import it at https://vercel.com
 2. Add the three env vars (`NEXT_PUBLIC_SUPABASE_URL`, `NEXT_PUBLIC_SUPABASE_ANON_KEY`, `GROQ_API_KEY`) — optionally `GROQ_MODEL`

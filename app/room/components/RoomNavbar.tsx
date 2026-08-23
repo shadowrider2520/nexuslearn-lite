@@ -7,6 +7,7 @@ const TABS: { key: RoomTab; label: string }[] = [
   { key: "roadmap", label: "Roadmap" },
   { key: "chat", label: "Chat" },
   { key: "members", label: "Members" },
+  { key: "documents", label: "Documents" },
 ];
 
 export function RoomNavbar({

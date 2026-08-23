@@ -1,5 +1,6 @@
 import { NextResponse } from "next/server";
 import { createClient } from "@/lib/supabase/server";
+import { CHAT_COMMAND_HELP, parseChatCommand } from "@/lib/ai/chat-command";
 import { buildTutorPrompt } from "@/lib/ai/tutor-prompt";
 import type { Step } from "@/lib/types";
 
@@ -17,6 +18,15 @@ export async function POST(req: Request) {
       { error: "roomId and content are required" },
       { status: 400 }
     );
+  }
+
+  if (content.length > 2_000) {
+    return NextResponse.json({ error: "Messages must be 2,000 characters or fewer" }, { status: 400 });
+  }
+
+  const command = parseChatCommand(content);
+  if (!command) {
+    return NextResponse.json({ error: CHAT_COMMAND_HELP }, { status: 400 });
   }
 
   const supabase = await createClient();
@@ -68,6 +78,26 @@ export async function POST(req: Request) {
     );
   }
 
+  if (command.type === "note") {
+    return NextResponse.json({ reply: null });
+  }
+
+  if (!process.env.GROQ_API_KEY) {
+    return NextResponse.json({ error: "The AI service is not configured" }, { status: 503 });
+  }
+
+  const { data: rateLimitAllowed, error: rateLimitError } = await supabase.rpc(
+    "can_request_ai_reply",
+    { room_id_input: roomId }
+  );
+
+  if (rateLimitError || !rateLimitAllowed) {
+    return NextResponse.json(
+      { error: "The AI tutor is taking a short breather. Please wait a moment before asking again." },
+      { status: 429 }
+    );
+  }
+
   const { data: roadmapData } = await supabase
     .from("roadmaps")
     .select("topic, steps")
@@ -105,7 +135,7 @@ export async function POST(req: Request) {
             { role: "system", content: tutorPrompt },
             {
               role: "user",
-              content: recentMsgs?.[recentMsgs.length - 1]?.content ?? content,
+              content: command.prompt,
             },
           ],
           temperature: 0.6,

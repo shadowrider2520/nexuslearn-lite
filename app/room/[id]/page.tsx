@@ -2,8 +2,10 @@
 
 import { Geist, Young_Serif } from "next/font/google";
 import { useCallback, useEffect, useMemo, useState } from "react";
+import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { deleteRoadmap, deleteTasks } from "../../actions";
+import { getFileExtension, validateDocument } from "@/lib/documents";
 import { DocumentsPanel } from "../components/DocumentsPanel";
 import type {
   ChatMessage,
@@ -11,6 +13,7 @@ import type {
   ProgressRow,
   RoadmapMeta,
   Room,
+  RoomDocument,
   RoomTab,
   Step,
   TaskItem,
@@ -44,6 +47,7 @@ export default function RoomPage({
   
 
   const [roomId, setRoomId] = useState("");
+  const router = useRouter();
 
   const [room, setRoom] = useState<Room | null>(null);
 
@@ -76,8 +80,9 @@ export default function RoomPage({
 
   const [messages, setMessages] = useState<ChatMessage[]>([]);
   const [chatInput, setChatInput] = useState("");
-  const [documents, setDocuments] = useState<{ id: string; file_name: string; file_path: string; uploaded_by: string }[]>([]);
+  const [documents, setDocuments] = useState<RoomDocument[]>([]);
   const [uploading, setUploading] = useState(false);
+  const [documentError, setDocumentError] = useState<string | null>(null);
   const [chatLoading, setChatLoading] = useState(false);
   const [chatError, setChatError] = useState<string | null>(null);
 
@@ -121,9 +126,12 @@ export default function RoomPage({
       data: { user },
     } = await supabase.auth.getUser();
 
-    if (user) {
-      setUserId(user.id);
+    if (!user) {
+      router.replace("/login");
+      return;
     }
+
+    setUserId(user.id);
 
     const { data: roomData, error: roomError } = await supabase
       .from("rooms")
@@ -133,6 +141,7 @@ export default function RoomPage({
 
     if (roomError) {
       console.error("ROOM LOAD ERROR:", roomError);
+      router.replace("/dashboard");
       return;
     }
 
@@ -171,7 +180,7 @@ export default function RoomPage({
           profileRows?.find((p) => p.id === m.user_id)?.username ?? "Unknown",
       }))
     );
-  }, [roomId, supabase]);
+  }, [roomId, router, supabase]);
 
   /*
    * LOAD ROADMAP LIST
@@ -299,11 +308,23 @@ export default function RoomPage({
     }
   }, [roomId, supabase]);
 
-  const loadDocuments = async () => {
-  const { data } = await supabase
-    .from("documents").select("id, file_name, file_path, uploaded_by").eq("room_id", roomId).order("created_at", { ascending: false });
-  if (data) setDocuments(data);
-  };
+  const loadDocuments = useCallback(async () => {
+    if (!roomId) return;
+
+    const { data, error } = await supabase
+      .from("documents")
+      .select("id, file_name, file_path, file_size, file_type, uploaded_by, created_at")
+      .eq("room_id", roomId)
+      .order("created_at", { ascending: false });
+
+    if (error) {
+      console.error("DOCUMENTS LOAD ERROR:", error);
+      setDocumentError("Could not load documents. Try refreshing the room.");
+      return;
+    }
+
+    setDocuments((data ?? []) as RoomDocument[]);
+  }, [roomId, supabase]);
 
   /*
    * ROOM REALTIME
@@ -361,11 +382,28 @@ export default function RoomPage({
       )
       .subscribe();
 
+    const documentChannel = supabase
+      .channel(`documents-${roomId}`)
+      .on(
+        "postgres_changes",
+        {
+          event: "*",
+          schema: "public",
+          table: "documents",
+          filter: `room_id=eq.${roomId}`,
+        },
+        () => {
+          loadDocuments();
+        }
+      )
+      .subscribe();
+
     return () => {
       supabase.removeChannel(memberChannel);
       supabase.removeChannel(msgChannel);
+      supabase.removeChannel(documentChannel);
     };
-  }, [roomId, supabase, loadRoomAndMembers, loadRoadmapsList, loadMessages]);
+  }, [roomId, supabase, loadDocuments, loadRoomAndMembers, loadRoadmapsList, loadMessages]);
 
   /*
    * ACTIVE ROADMAP REALTIME
@@ -750,28 +788,56 @@ export default function RoomPage({
   };
 
   const handleFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
-  const file = e.target.files?.[0];
-  if (!file) return;
-  setUploading(true);
+    const file = e.target.files?.[0];
+    e.target.value = "";
+    if (!file || !roomId || !userId) return;
 
-  const filePath = `${roomId}/${Date.now()}_${file.name}`;
-  const { error: uploadError } = await supabase.storage.from("room-documents").upload(filePath, file);
+    const validationError = validateDocument(file);
+    if (validationError) {
+      setDocumentError(validationError);
+      return;
+    }
 
-  if (!uploadError) {
-    await supabase.from("documents").insert({
+    setUploading(true);
+    setDocumentError(null);
+
+    const filePath = `${roomId}/${crypto.randomUUID()}.${getFileExtension(file.name)}`;
+    const { error: uploadError } = await supabase.storage
+      .from("room-documents")
+      .upload(filePath, file, { contentType: file.type || undefined });
+
+    if (uploadError) {
+      setDocumentError(`Upload failed: ${uploadError.message}`);
+      setUploading(false);
+      return;
+    }
+
+    const { error: documentInsertError } = await supabase.from("documents").insert({
       room_id: roomId,
       uploaded_by: userId,
       file_name: file.name,
       file_path: filePath,
       file_size: file.size,
+      file_type: file.type || null,
     });
-    await loadDocuments();
-  }
-  setUploading(false);
-};
+
+    if (documentInsertError) {
+      await supabase.storage.from("room-documents").remove([filePath]);
+      setDocumentError(`Could not save the document: ${documentInsertError.message}`);
+    } else {
+      await loadDocuments();
+    }
+
+    setUploading(false);
+  };
 
 const downloadDocument = async (filePath: string, fileName: string) => {
-  const { data } = await supabase.storage.from("room-documents").download(filePath);
+  setDocumentError(null);
+  const { data, error } = await supabase.storage.from("room-documents").download(filePath);
+  if (error) {
+    setDocumentError(`Download failed: ${error.message}`);
+    return;
+  }
   if (data) {
     const url = URL.createObjectURL(data);
     const a = document.createElement("a");
@@ -783,8 +849,19 @@ const downloadDocument = async (filePath: string, fileName: string) => {
 };
 
 const handleDeleteDocument = async (docId: string, filePath: string) => {
-  await supabase.storage.from("room-documents").remove([filePath]);
-  await supabase.from("documents").delete().eq("id", docId);
+  setDocumentError(null);
+  const { error: storageError } = await supabase.storage.from("room-documents").remove([filePath]);
+  if (storageError) {
+    setDocumentError(`Could not delete the file: ${storageError.message}`);
+    return;
+  }
+
+  const { error: documentError } = await supabase.from("documents").delete().eq("id", docId);
+  if (documentError) {
+    setDocumentError(`The file was removed, but its record could not be deleted: ${documentError.message}`);
+    return;
+  }
+
   await loadDocuments();
 };
 
@@ -922,6 +999,7 @@ const handleDeleteDocument = async (docId: string, filePath: string) => {
   <DocumentsPanel
     documents={documents}
     uploading={uploading}
+    error={documentError}
     userId={userId}
     onUpload={handleFileUpload}
     onDownload={downloadDocument}
