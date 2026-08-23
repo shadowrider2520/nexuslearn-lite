@@ -152,7 +152,7 @@ create policy "uploaders can delete room documents"
   on storage.objects for delete to authenticated
   using (
     bucket_id = 'room-documents'
-    and owner_id = auth.uid()
+    and owner_id = auth.uid()::text
   );
 
 do $$
