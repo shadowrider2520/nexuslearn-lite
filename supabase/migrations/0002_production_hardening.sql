@@ -17,6 +17,10 @@ create table if not exists public.documents (
   created_at timestamptz not null default now()
 );
 
+-- Upgrade document tables that may have been created by the earlier upload wiring.
+alter table public.documents
+  add column if not exists file_type text;
+
 create index if not exists documents_room_created_at_idx
   on public.documents (room_id, created_at desc);
 
