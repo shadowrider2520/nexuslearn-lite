@@ -1,14 +1,19 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  // Config for standard Webpack
   webpack: (config) => {
-    // pdf-parse optionally requires canvas (for rendering). We don't need it —
-    // alias it to false so webpack doesn't warn about a missing native module.
     config.resolve.alias = {
       ...config.resolve.alias,
       canvas: false,
     };
     return config;
+  },
+  // Config for Turbopack to prevent conflict errors/warnings
+  turbopack: {
+    resolveAlias: {
+      canvas: "./lib/ai/empty-mock.ts",
+    },
   },
 };
 
