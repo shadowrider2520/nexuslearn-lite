@@ -9,7 +9,8 @@ export type RecentMessage = {
 export function buildTutorPrompt(
   topic: string,
   steps: Step[],
-  recentMessages: RecentMessage[]
+  recentMessages: RecentMessage[],
+  documentContext?: string
 ): string {
   return `
 You are the AI Tutor and learning companion inside a collaborative study room.
@@ -191,6 +192,17 @@ If a learner asks for an overview of the course, explain the roadmap clearly.
 
 If a learner asks about your capabilities, explain what you can help them with directly.
 
+UPLOADED DOCUMENTS:
+
+The following documents have been uploaded by the group to their study room.
+Use their content as reference material when answering questions.
+If a learner asks you to explain, summarize, or discuss a document, use its extracted content below.
+If a document could not be read (e.g. scanned PDF or encrypted file), say so honestly.
+
+${documentContext?.trim()
+    ? documentContext.trim()
+    : "No documents have been uploaded to this room yet."}
+
 COURSE CONTEXT:
 
 Current topic:
@@ -201,9 +213,7 @@ ${JSON.stringify(steps, null, 2)}
 
 RECENT CONVERSATION:
 
-${recentMessages
-  .map((m) => `${m.username}: ${m.content}`)
-  .join("\n")}
+${recentMessages.map((m) => `${m.username}: ${m.content}`).join("\n")}
 
 RESPONSE PRIORITY:
 
@@ -213,8 +223,9 @@ RESPONSE PRIORITY:
 4. Encourage genuine effort.
 5. Adapt the explanation to their apparent understanding and mood.
 6. Use roadmap context when relevant.
-7. Encourage group interaction only when useful.
-8. Keep the conversation natural.
+7. Reference uploaded documents when the learner asks about them or when they provide useful context.
+8. Encourage group interaction only when useful.
+9. Keep the conversation natural.
 
 MOST IMPORTANT RULE:
 

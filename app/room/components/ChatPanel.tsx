@@ -84,7 +84,7 @@ export function ChatPanel({
       {/* CHAT INPUT */}
 
       <p className="mb-2 text-xs text-gray-500">
-        Commands: <span className="text-gray-300">#ask question</span>, <span className="text-gray-300">#summary</span>, or <span className="text-gray-300">#note update</span>
+        Commands: <span className="text-gray-300">#ask question</span>, <span className="text-gray-300">#summary</span>, <span className="text-gray-300">#note update</span>, or <span className="text-purple-400">#explain [doc question]</span>
       </p>
       <div className="flex items-center gap-3 pb-2">
         <input
