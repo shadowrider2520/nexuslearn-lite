@@ -1,6 +1,7 @@
 import type { NextConfig } from "next";
 
 const nextConfig: NextConfig = {
+  serverExternalPackages: ["pdf-parse", "@napi-rs/canvas"],
   // Config for standard Webpack
   webpack: (config) => {
     config.resolve.alias = {

@@ -45,11 +45,12 @@ export async function extractTextFromBuffer(
     return buffer.toString("utf-8").slice(0, MAX_CHARS);
   }
 
-  // ── PDF (pdf-parse v2 — most reliable for PDF buffers) ─────────────────────
+  // ── PDF (pdf-parse v2 + CanvasFactory for serverless compat) ──────────────
   if (ext === "pdf" || fileType === "application/pdf") {
     try {
+      const { CanvasFactory } = await import("pdf-parse/worker");
       const { PDFParse } = await import("pdf-parse");
-      const parser = new PDFParse({ data: new Uint8Array(buffer) });
+      const parser = new PDFParse({ data: new Uint8Array(buffer), CanvasFactory });
       const result = await parser.getText();
       const text = (result.text ?? "").trim();
       return text.length > 0
