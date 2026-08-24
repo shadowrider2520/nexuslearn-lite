@@ -45,12 +45,27 @@ export async function extractTextFromBuffer(
     return buffer.toString("utf-8").slice(0, MAX_CHARS);
   }
 
-  // ── Binary Office Formats & PDF (OfficeParser) ─────────────────────────────
+  // ── PDF (pdf-parse v2 — most reliable for PDF buffers) ─────────────────────
+  if (ext === "pdf" || fileType === "application/pdf") {
+    try {
+      const { PDFParse } = await import("pdf-parse");
+      const parser = new PDFParse({ data: new Uint8Array(buffer) });
+      const result = await parser.getText();
+      const text = (result.text ?? "").trim();
+      return text.length > 0
+        ? text.slice(0, MAX_CHARS)
+        : `[This PDF document appears to have no extractable text content]`;
+    } catch (err) {
+      console.error(`PDF extraction error:`, err);
+      return `[PDF document could not be read — it may be encrypted, scanned, or corrupted]`;
+    }
+  }
+
+  // ── Office XML Formats — DOCX, XLSX, PPTX (OfficeParser) ─────────────────
   if (
-    ["pdf", "docx", "xlsx", "pptx"].includes(ext) ||
+    ["docx", "xlsx", "pptx"].includes(ext) ||
     (fileType &&
       [
-        "application/pdf",
         "application/vnd.openxmlformats-officedocument.wordprocessingml.document",
         "application/vnd.openxmlformats-officedocument.spreadsheetml.sheet",
         "application/vnd.openxmlformats-officedocument.presentationml.presentation",
@@ -58,7 +73,8 @@ export async function extractTextFromBuffer(
   ) {
     try {
       const { OfficeParser } = await import("officeparser");
-      const ast = await OfficeParser.parseOffice(buffer);
+      // Pass fileType so officeparser doesn't need to inspect the ZIP header
+      const ast = await OfficeParser.parseOffice(buffer, { fileType: ext as "docx" | "xlsx" | "pptx" });
       const text = (ast.toText() ?? "").trim();
       return text.length > 0
         ? text.slice(0, MAX_CHARS)
